@@ -60,8 +60,25 @@ export const jobs: Job[] = [
     requiredMaterial: "AL-6061-PLT-0.375",
     shortageSheets: 44,
     risk: "High",
-    dueDate: "Next Tuesday",
+    dueDate: "within 4 business days",
     progress: 18
+  },
+  {
+    id: "J-2070",
+    slug: "j-2070",
+    customerSlug: "kepler-machine-works",
+    customerName: "Kepler Machine Works",
+    customerPo: "PO-7714",
+    part: "Support Bracket Rev B",
+    quantity: 60,
+    status: "Approved",
+    currentStep: "Queued",
+    workCenter: "Laser Cutting",
+    requiredMaterial: "AL-6061-PLT-0.375",
+    shortageSheets: 0,
+    risk: "Watch",
+    dueDate: "Due soon",
+    progress: 25
   },
   {
     id: "J-2104",

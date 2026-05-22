@@ -11,12 +11,16 @@ export function AuditPanel({
   subtitle?: string;
   items: Array<{
     actor: string;
+    actorRole?: string;
     event: string;
     time: string;
     detail: string;
     severity?: string;
     entityHref: string;
     entityLabel: string;
+    result?: string;
+    notes?: string;
+    entityType?: string;
   }>;
   className?: string;
 }) {

@@ -31,11 +31,28 @@ import {
   getJobById,
   getJobTraceEvents,
   getMaterialBySku,
+  getMaterialsSummary,
+  getMaterialRows,
+  getBlockedJobsByMaterialShortage,
+  getMaterialReservationBreakdown,
+  getMaterialSupplierPanel,
+  getMaterialImpactTimeline,
   getPurchaseRequestById,
+  getPurchaseRequestState,
+  getPurchaseRequestAuditEntries,
   getQuoteById,
   getProductionQueue,
+  getQualitySummary,
+  getInspectionQueue,
+  getDefectReasonBreakdown,
   getRecentAuditEvents,
   getReworkOrderById,
+  defectReasonBreakdownRows,
+  inspectionQueueRows,
+  j2042ApprovalAuditTrail,
+  j2042QualityTimeline,
+  j2042ScrapEventDetail,
+  materialImpactTimeline,
   j2035ProductionUpdates,
   j2035QualityInspectionChecks,
   j2035QualityReadiness,
@@ -48,6 +65,8 @@ import {
   jobs,
   materials,
   purchaseRequests,
+  purchaseRequestState,
+  pr3091AuditTrail,
   quotes,
   reworkOrders,
   demoPath,
@@ -1072,234 +1091,982 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "quality":
-      return (
-        <DataTableShell title="Inspection queue" subtitle="Seeded quality record shell.">
-          <TinyTable
-            columns={["Inspection", "Job", "Status", "Reviewer"]}
-            rows={[
-              [
-                <EntityLink href="/quality/j-2042/scrap-approval">Q-2042-A</EntityLink>,
-                <EntityLink href="/jobs/j-2035">J-2035</EntityLink>,
-                <StatusBadge label="Pending Inspection" />,
-                "Quality Inspector"
-              ],
-              [
-                <EntityLink href="/quality/j-2042/rework-created">Q-2042-B</EntityLink>,
-                <EntityLink href="/jobs/j-2035">J-2035</EntityLink>,
-                <StatusBadge label="Failed" />,
-                "Supervisor"
-              ]
-            ]}
-          />
-        </DataTableShell>
-      );
+      {
+        const summary = getQualitySummary(jobs, reworkOrders, inspectionQueueRows);
+        const inspectionQueue = getInspectionQueue(inspectionQueueRows);
+        const defectReasons = getDefectReasonBreakdown(defectReasonBreakdownRows);
+
+        return (
+          <>
+            <MetricRow
+              items={[
+                {
+                  label: "Open inspections",
+                  value: `${summary.openInspections}`,
+                  detail: "Inspection queue activity",
+                  tone: "blue"
+                },
+                {
+                  label: "Failed inspections",
+                  value: `${summary.failedInspections}`,
+                  detail: "Jobs that need disposition",
+                  tone: "rose"
+                },
+                {
+                  label: "Scrap above tolerance",
+                  value: `${summary.scrapAboveTolerance}`,
+                  detail: "Jobs blocked on approval",
+                  tone: "amber"
+                },
+                {
+                  label: "Rework orders open",
+                  value: `${summary.reworkOrdersOpen}`,
+                  detail: "Controlled follow-up work",
+                  tone: "rose"
+                },
+                {
+                  label: "Jobs waiting for sign-off",
+                  value: `${summary.jobsWaitingForSignOff}`,
+                  detail: "Supervisor or inspector action",
+                  tone: "amber"
+                },
+                {
+                  label: "Average first-pass yield",
+                  value: `${summary.averageFirstPassYield.toFixed(1)}%`,
+                  detail: "Based on seeded job records",
+                  tone: "emerald"
+                }
+              ]}
+            />
+
+            <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+              <div className="space-y-4">
+                <RiskAlert
+                  severity="Critical"
+                  title="J-2042 requires immediate scrap approval"
+                  description="Scrap exceeds tolerance. Supervisor approval required before production can continue."
+                  href="/quality/j-2042/scrap-approval"
+                  actionLabel="Review scrap approval"
+                />
+
+                <DataTableShell
+                  title="Inspection queue"
+                  subtitle="Primary exception plus a few supporting rows from the seeded quality record."
+                >
+                  <TinyTable
+                    columns={["Job", "Customer", "Part", "Current step", "Inspector", "Result", "Scrap rate", "Status", "Due date", "Action"]}
+                    rows={inspectionQueue.map((row) => [
+                      <EntityLink href={row.href}>{row.jobId}</EntityLink>,
+                      row.customerName,
+                      row.part,
+                      row.currentStep,
+                      row.inspector,
+                      <StatusBadge label={row.result} />,
+                      row.scrapRate,
+                      <StatusBadge label={row.status} />,
+                      row.dueDate,
+                      <EntityLink href={row.href}>{row.action}</EntityLink>
+                    ])}
+                  />
+                </DataTableShell>
+              </div>
+
+              <div className="space-y-4">
+                <TimelineShell
+                  title="Defect reason breakdown"
+                  subtitle="Most common defect families contributing to scrap and rework."
+                >
+                  <div className="space-y-3">
+                    {defectReasons.map((reason) => (
+                      <div key={reason.reason} className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="font-medium text-slate-950">{reason.reason}</span>
+                          <span className="font-mono text-slate-500">
+                            {reason.count} / {reason.percentage}%
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-200">
+                          <div
+                            className="h-2 rounded-full bg-rose-500"
+                            style={{ width: `${reason.percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </TimelineShell>
+
+                <TimelineShell
+                  title="Recent quality events"
+                  subtitle="Timeline from inspection failure through controlled rework."
+                >
+                  <div className="space-y-3">
+                    {j2042QualityTimeline.map((entry) => (
+                      <div key={`${entry.timestamp}-${entry.title}`} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-slate-950">{entry.title}</div>
+                          <SeverityBadge severity={entry.severity} />
+                        </div>
+                        <p className="mt-1 text-sm leading-6 text-slate-600">{entry.detail}</p>
+                        <div className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
+                          {entry.timestamp}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </TimelineShell>
+              </div>
+            </div>
+          </>
+        );
+      }
 
     case "quality-scrap":
       {
         const job = getJobById("J-2042", jobs);
         const rework = getReworkOrderById("RW-2042-01", reworkOrders);
         const scrapRate = job?.scrapRate ?? calculateScrapRate(job?.scrapQuantity ?? 0, job?.completedQuantity ?? 0);
+        const toleranceRate = job?.allowedTolerance ?? 0.05;
+        const selectedDecision = "Approve scrap and create rework";
 
         return (
-          <>
+          <div className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <EntityLink href="/jobs/j-2042">J-2042</EntityLink>
+                    <StatusBadge label="Scrap Approval Required" />
+                    <SeverityBadge severity="Critical" />
+                  </div>
+                  <div className="grid gap-x-4 gap-y-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
+                    <div>Customer: <span className="font-medium text-slate-950">{job?.customerName ?? "Northline Fabrication"}</span></div>
+                    <div>Part: <span className="font-medium text-slate-950">{job?.part ?? "Bracket Assembly Rev B"}</span></div>
+                    <div>Quantity: <span className="font-medium text-slate-950">{job?.quantity ?? 200}</span></div>
+                    <div>Completed quantity: <span className="font-medium text-slate-950">{job?.completedQuantity ?? 180}</span></div>
+                    <div>Scrap quantity: <span className="font-medium text-slate-950">{job?.scrapQuantity ?? 18}</span></div>
+                    <div>Scrap rate: <span className="font-medium text-rose-700">{Math.round(scrapRate * 100)}%</span></div>
+                    <div>Allowed tolerance: <span className="font-medium text-slate-950">{Math.round(toleranceRate * 100)}%</span></div>
+                    <div>Work center: <span className="font-medium text-slate-950">{job?.workCenter ?? "Welding"}</span></div>
+                    <div>Current routing step: <span className="font-medium text-slate-950">{job?.currentStep ?? "Weld"}</span></div>
+                    <div>Assigned operator: <span className="font-medium text-slate-950">Marco Singh</span></div>
+                    <div>Supervisor: <span className="font-medium text-slate-950">Dana Brooks</span></div>
+                    <div>Due date risk: <span className="font-medium text-rose-700">High</span></div>
+                  </div>
+                </div>
+                <Link
+                  href="/quality/j-2042/rework-created"
+                  className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                >
+                  Approve scrap and create rework
+                </Link>
+              </div>
+            </div>
+
             <RiskAlert
               severity="Critical"
               title="Scrap approval is required"
-              description={`${job?.id ?? "J-2042"} logged ${job?.scrapQuantity ?? 18} scrap units against ${job?.completedQuantity ?? 180} completed units. A controlled approval is required before closure.`}
+              description="Scrap rate is above the 5% tolerance. Production is blocked until a supervisor decision is recorded."
               href="/quality/j-2042/rework-created"
-              actionLabel="Open rework"
+              actionLabel="Approve scrap and create rework"
             />
-            <MetricRow
-              items={[
-                {
-                  label: "Inspection",
-                  value: "Failed",
-                  detail: `${Math.round(scrapRate * 100)}% scrap rate`,
-                  tone: "rose"
-                },
-                {
-                  label: "Disposition",
-                  value: "Scrap",
-                  detail: `Tolerance ${Math.round((job?.allowedTolerance ?? 0.05) * 100)}%`,
-                  tone: "amber"
-                },
-                {
-                  label: "Linked job",
-                  value: job?.id ?? "J-2042",
-                  detail: job?.currentStep ?? "Weld",
-                  tone: "blue"
-                },
-                {
-                  label: "Material impact",
-                  value: "Hold",
-                  detail: rework?.reason ?? "Keep stock from shipping",
-                  tone: "rose"
-                }
-              ]}
-            />
-          </>
+
+            <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+              <div className="space-y-4">
+                <TimelineShell title="Scrap event details" subtitle="Recorded by the operator and reviewed by quality.">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reported by operator</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">{j2042ScrapEventDetail.reportedBy}</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reported at</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">{j2042ScrapEventDetail.reportedAt}</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reason</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">{j2042ScrapEventDetail.reason}</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Operator note</div>
+                      <div className="mt-2 text-sm leading-6 text-slate-700">{j2042ScrapEventDetail.operatorNote}</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Inspection note</div>
+                      <div className="mt-2 text-sm leading-6 text-slate-700">{j2042ScrapEventDetail.inspectionNote}</div>
+                    </div>
+                  </div>
+                </TimelineShell>
+
+                <DataTableShell title="Decision panel" subtitle="Static supervisor decision UI for the quality exception.">
+                  <div className="space-y-3 p-4">
+                    {[
+                      "Approve scrap and create rework",
+                      "Reject scrap log and return to operator",
+                      "Hold job for engineering review"
+                    ].map((option) => {
+                      const selected = option === selectedDecision;
+                      return (
+                        <div
+                          key={option}
+                          className={cn(
+                            "rounded-md border p-3",
+                            selected ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-white"
+                          )}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold text-slate-950">{option}</div>
+                              {selected ? (
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                  Supervisor note: Approve scrap event. Create weld rework and inspect fixture setup before continuing.
+                                </p>
+                              ) : null}
+                            </div>
+                            {selected ? <StatusBadge label="Selected" /> : <StatusBadge label="Pending" />}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Decision</div>
+                        <div className="mt-2 text-sm font-medium text-slate-950">{selectedDecision}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Rework required</div>
+                        <div className="mt-2 text-sm font-medium text-slate-950">Yes</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Rework routing step</div>
+                        <div className="mt-2 text-sm font-medium text-slate-950">{rework?.nextStep ?? "Weld Rework"}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Estimated rework hours</div>
+                        <div className="mt-2 text-sm font-medium text-slate-950">{rework?.estimatedHours ?? 6}h</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Priority</div>
+                        <div className="mt-2 text-sm font-medium text-slate-950">{rework?.priority ?? "High"}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Supervisor note</div>
+                        <div className="mt-2 text-sm leading-6 text-slate-700">
+                          Approve scrap event. Create weld rework and inspect fixture setup before continuing.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </DataTableShell>
+              </div>
+
+              <div className="space-y-4">
+                <TimelineShell title="Rework preview" subtitle="Controlled follow-up that links the quality exception to the new job path.">
+                  <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <EntityLink href="/quality/j-2042/rework-created">RW-2042-01</EntityLink>
+                      <StatusBadge label={rework?.status ?? "Open"} />
+                    </div>
+                    <div className="grid gap-2 text-sm text-slate-700">
+                      <div>Linked job: <span className="font-medium text-slate-950">{rework?.linkedJobId ?? "J-2042"}</span></div>
+                      <div>Step: <span className="font-medium text-slate-950">{rework?.nextStep ?? "Weld Rework"}</span></div>
+                      <div>Work center: <span className="font-medium text-slate-950">{rework?.workCenter ?? "Welding"}</span></div>
+                      <div>Estimated hours: <span className="font-medium text-slate-950">{rework?.estimatedHours ?? 6}h</span></div>
+                      <div>Priority: <span className="font-medium text-slate-950">{rework?.priority ?? "High"}</span></div>
+                      <div>Supervisor: <span className="font-medium text-slate-950">{rework?.supervisor ?? "Dana Brooks"}</span></div>
+                    </div>
+                  </div>
+                </TimelineShell>
+
+                <TimelineShell title="Permission cue" subtitle="Who can act on the quality exception.">
+                  <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                    <div className="font-semibold text-slate-950">Supervisor approval required</div>
+                    <div className="grid gap-2">
+                      <div>Operator can log scrap</div>
+                      <div>Shop Supervisor approves scrap/rework</div>
+                      <div>Quality Inspector records inspection</div>
+                      <div>Owner / GM can view exception status</div>
+                    </div>
+                  </div>
+                </TimelineShell>
+              </div>
+            </div>
+          </div>
         );
       }
 
     case "quality-rework":
-      return (
-        <AuditPanel
-          title="Rework record"
-          subtitle="Placeholder for the rework flow and event trace."
-          items={[
-            {
-              actor: "Quality Inspector",
-              event: "Created rework",
-              time: "1:04 PM",
-              detail: "RW-2042-01 created from failed inspection.",
-              severity: "Approval",
-              entityHref: "/quality/j-2042/scrap-approval",
-              entityLabel: "Original exception"
-            },
-            {
-              actor: "Scheduler",
-              event: "Queued rework",
-              time: "1:11 PM",
-              detail: "Rework added to the production queue as a controlled follow-up.",
-              severity: "Automation",
-              entityHref: "/jobs/j-2035",
-              entityLabel: "Job J-2035"
-            }
-          ]}
-        />
-      );
+      {
+        const rework = getReworkOrderById("RW-2042-01", reworkOrders);
+
+        return (
+          <div className="space-y-4">
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                    Rework created
+                  </div>
+                  <h3 className="text-[15px] font-semibold text-emerald-950">
+                    Rework order RW-2042-01 created and linked to Job J-2042.
+                  </h3>
+                  <p className="max-w-3xl text-sm leading-6 text-emerald-900/80">
+                    The job is now controlled through rework routing instead of an open scrap exception.
+                  </p>
+                </div>
+                <StatusBadge label="Rework Created" />
+              </div>
+            </div>
+
+            <MetricRow
+              items={[
+                {
+                  label: "Job status",
+                  value: "Rework",
+                  detail: "Changed from Scrap Approval Required",
+                  tone: "rose"
+                },
+                {
+                  label: "Scrap event",
+                  value: "Approved",
+                  detail: "Supervisor decision recorded",
+                  tone: "emerald"
+                },
+                {
+                  label: "Rework order",
+                  value: rework?.id ?? "RW-2042-01",
+                  detail: "Controlled follow-up routing",
+                  tone: "blue"
+                },
+                {
+                  label: "Quality dashboard",
+                  value: "Updated",
+                  detail: "Exception counts recalculate",
+                  tone: "emerald"
+                }
+              ]}
+            />
+
+            <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+              <TimelineShell title="Rework order card" subtitle="Controlled follow-up linked back to the original job.">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Rework order</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.id ?? "RW-2042-01"}</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Job</div>
+                    <EntityLink href="/jobs/j-2042" className="mt-2 inline-flex">
+                      {rework?.linkedJobId ?? "J-2042"}
+                    </EntityLink>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">Northline Fabrication</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reason</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.reason ?? "Weld Porosity"}</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Work center</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.workCenter ?? "Welding"}</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Estimated hours</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.estimatedHours ?? 6}h</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Priority</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.priority ?? "High"}</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Status</div>
+                    <div className="mt-2"><StatusBadge label={rework?.status ?? "Open"} /></div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Assigned supervisor</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.supervisor ?? "Dana Brooks"}</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Next step</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.nextStep ?? "Weld Rework"}</div>
+                  </div>
+                </div>
+              </TimelineShell>
+
+              <div className="space-y-4">
+                <TimelineShell title="Updated job timeline" subtitle="The exception is now a controlled production task.">
+                  <div className="space-y-3">
+                    {[
+                      { label: "Inspection failed", detail: "Sample failed visual weld inspection.", tone: "Critical" },
+                      { label: "Scrap logged", detail: "Marco Singh recorded 18 scrap units.", tone: "Warning" },
+                      { label: "Supervisor review required", detail: "Production blocked until a decision is recorded.", tone: "Approval" },
+                      { label: "Scrap approved", detail: "Dana Brooks approved the disposition.", tone: "Success" },
+                      { label: "Rework order created", detail: "RW-2042-01 linked to J-2042.", tone: "Automation" },
+                      { label: "Awaiting weld rework", detail: "Controlled routing is now active.", tone: "Info" }
+                    ].map((item) => (
+                      <div key={item.label} className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <div>
+                          <div className="text-sm font-medium text-slate-950">{item.label}</div>
+                          <div className="mt-1 text-sm leading-6 text-slate-600">{item.detail}</div>
+                        </div>
+                        <SeverityBadge severity={item.tone} />
+                      </div>
+                    ))}
+                  </div>
+                </TimelineShell>
+
+                <AuditPanel
+                  title="Audit panel"
+                  subtitle="Supervisor and system events show the controlled handoff from scrap to rework."
+                  items={j2042ApprovalAuditTrail.map((entry) => ({
+                    actor: entry.actor,
+                    actorRole: entry.actorRole,
+                    event: entry.action,
+                    time: entry.timestamp,
+                    detail: entry.result,
+                    severity: entry.severity,
+                    entityHref:
+                      entry.entityId === "J-2042"
+                        ? "/quality/j-2042/scrap-approval"
+                        : "/quality/j-2042/rework-created",
+                    entityLabel: entry.entityId,
+                    result: entry.result,
+                    notes: entry.notes,
+                    entityType: entry.entityType
+                  }))}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Link
+                href="/jobs/j-2099/material-impact"
+                className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                Review material shortage J-2099
+              </Link>
+            </div>
+          </div>
+        );
+      }
 
     case "materials":
-      return (
-        <DataTableShell title="Inventory" subtitle="Stock positions, reservations, and shortage signals.">
-          <TinyTable
-            columns={["Material", "On hand", "Status", "Linked job"]}
-            rows={[
-              [
-                <EntityLink href="/materials/al-6061-plt-0.375">AL-6061-PLT-0.375</EntityLink>,
-                "18 sheets",
-                <StatusBadge label="Available" />,
-                <EntityLink href="/jobs/j-2035">J-2035</EntityLink>
-              ],
-              [
-                "AL-6061-PLT-0.250",
-                "4 sheets",
-                <StatusBadge label="Low Stock" />,
-                <EntityLink href="/purchase-requests/pr-3091">PR-3091</EntityLink>
-              ]
-            ]}
-          />
-        </DataTableShell>
-      );
-
-    case "material-al6061":
-      return (
-        <>
-          <MetricRow
-            items={[
-              { label: "Material status", value: "Available", detail: "Ready to reserve", tone: "emerald" },
-              { label: "UOM", value: "Sheets", detail: "0.375 in plate", tone: "slate" },
-              { label: "Reserved", value: "12", detail: "Held for seeded jobs", tone: "blue" },
-              { label: "Purchase requests", value: "1", detail: "PR-3091 linked", tone: "amber" }
-            ]}
-          />
-          <AuditPanel
-            title="Lot history"
-            subtitle="Traceability trail for the material record."
-            items={[
-              {
-                actor: "Purchasing",
-                event: "Received stock",
-                time: "9:12 AM",
-                detail: "Material added to inventory and made available.",
-                severity: "Success",
-                entityHref: "/materials",
-                entityLabel: "Inventory"
-              },
-              {
-                actor: "Scheduler",
-                event: "Reserved lot",
-                time: "10:20 AM",
-                detail: "Hold placed for J-2035 and J-2099.",
-                severity: "Automation",
-                entityHref: "/jobs/j-2035",
-                entityLabel: "Job J-2035"
-              }
-            ]}
-          />
-        </>
-      );
-
-    case "job-2099-material":
       {
-        const job = getJobById("J-2099", jobs);
+        const summary = getMaterialsSummary(materials, jobs, purchaseRequests);
+        const rows = getMaterialRows(materials, jobs);
+        const blockedJobs = getBlockedJobsByMaterialShortage(jobs, materials);
         const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
         const pr = getPurchaseRequestById("PR-3091", purchaseRequests);
 
         return (
           <>
-            <RiskAlert
-              severity="Critical"
-              title="Material shortage threatens release"
-              description={`${job?.id ?? "J-2099"} cannot proceed without ${material?.sku ?? "AL-6061-PLT-0.375"}. The shortage is ${material?.shortage ?? 44} sheets.`}
-              href="/purchase-requests/pr-3091"
-              actionLabel="Review PR"
-            />
             <MetricRow
               items={[
                 {
-                  label: "Shortage",
-                  value: `${material?.shortage ?? 44} sheets`,
-                  detail: "No free sheet inventory",
-                  tone: "rose"
-                },
-                {
-                  label: "Impact",
-                  value: "1 job",
-                  detail: `${job?.id ?? "J-2099"} is blocked`,
+                  label: "Materials below reorder point",
+                  value: `${summary.materialsBelowReorderPoint}`,
+                  detail: material?.sku ?? "Seeded shortage material",
                   tone: "amber"
                 },
                 {
-                  label: "Material",
-                  value: material?.sku ?? "AL-6061-PLT-0.375",
-                  detail: material?.supplier ?? "Reserved for priority work",
+                  label: "Jobs blocked by shortage",
+                  value: `${summary.jobsBlockedByShortage}`,
+                  detail: blockedJobs.map((job) => job.jobId).join(", "),
+                  tone: "rose"
+                },
+                {
+                  label: "Open purchase requests",
+                  value: `${summary.openPurchaseRequests}`,
+                  detail: "Submitted procurement work",
                   tone: "blue"
                 },
                 {
-                  label: "Resolution",
-                  value: pr?.id ?? "PR-3091",
-                  detail: "Procurement handoff seeded",
+                  label: "Incoming POs this week",
+                  value: `${summary.incomingPosThisWeek}`,
+                  detail: "Expected supply flow",
                   tone: "emerald"
+                },
+                {
+                  label: "Reserved inventory value",
+                  value: `$${summary.reservedInventoryValue.toLocaleString()}`,
+                  detail: "Held against active jobs",
+                  tone: "slate"
+                },
+                {
+                  label: "Critical shortages",
+                  value: `${summary.criticalShortages}`,
+                  detail: "Blocked jobs and schedule risk",
+                  tone: "rose"
                 }
               ]}
             />
+
+            <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+              <div className="space-y-4">
+                <RiskAlert
+                  severity="Critical"
+                  title="Job J-2099 is blocked"
+                  description="44 sheets of Aluminum Plate 6061 are required before CNC Mill can begin."
+                  href="/jobs/j-2099/material-impact"
+                  actionLabel="View job impact"
+                />
+
+                <DataTableShell
+                  title="Materials table"
+                  subtitle="Shortage signal and linked jobs are visible before the schedule slips."
+                >
+                  <TinyTable
+                    columns={["SKU", "Material name", "On hand", "Reserved", "Available", "Reorder point", "Shortage", "Supplier", "Affected jobs", "Status", "Action"]}
+                    rows={rows.map((row) => [
+                      <EntityLink href={row.href}>{row.sku}</EntityLink>,
+                      row.name,
+                      `${row.onHand}`,
+                      `${row.reserved}`,
+                      `${row.available}`,
+                      `${row.reorderPoint}`,
+                      <span className="font-semibold text-rose-700">{row.shortage}</span>,
+                      row.supplier,
+                      <div className="flex flex-wrap gap-2">
+                        {row.affectedJobIds.map((jobId) => (
+                          <EntityLink
+                            key={jobId}
+                            href={
+                              jobId === "J-2099"
+                                ? "/jobs/j-2099/material-impact"
+                                : jobId === "J-2035"
+                                  ? "/jobs/j-2035"
+                                  : "/jobs"
+                            }
+                          >
+                            {jobId}
+                          </EntityLink>
+                        ))}
+                      </div>,
+                      <div className="flex flex-wrap gap-2">
+                        <StatusBadge label="Shortage" />
+                        <StatusBadge label="Blocked Job" />
+                      </div>,
+                      <EntityLink href="/jobs/j-2099/material-impact">{row.action}</EntityLink>
+                    ])}
+                  />
+                </DataTableShell>
+              </div>
+
+              <div className="space-y-4">
+                <TimelineShell title="Incoming and purchase request preview" subtitle="The shortage becomes a seeded purchasing record.">
+                  <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <EntityLink href="/purchase-requests/pr-3091">PR-3091</EntityLink>
+                      <StatusBadge label={pr?.status ?? "Submitted"} />
+                    </div>
+                    <div className="grid gap-2 text-sm text-slate-700">
+                      <div>Material: <span className="font-medium text-slate-950">{material?.sku ?? "AL-6061-PLT-0.375"}</span></div>
+                      <div>Quantity: <span className="font-medium text-slate-950">{pr?.quantity ?? 50} sheets</span></div>
+                      <div>Supplier: <span className="font-medium text-slate-950">{pr?.supplier ?? "Midwest Metals Supply"}</span></div>
+                      <div>Linked job: <EntityLink href="/jobs/j-2099/material-impact">J-2099</EntityLink></div>
+                    </div>
+                  </div>
+                </TimelineShell>
+
+                <TimelineShell title="Demo path" subtitle="Next: Purchase Request - PR-3091">
+                  <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-sm leading-6 text-slate-700">
+                      The shortage is resolved by creating a purchase request that keeps traceability tied to the blocked job.
+                    </div>
+                    <Link
+                      href="/purchase-requests/pr-3091"
+                      className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                    >
+                      Continue to PR-3091
+                    </Link>
+                  </div>
+                </TimelineShell>
+              </div>
+            </div>
           </>
         );
       }
 
-    case "purchase-request":
-      return (
-        <>
-          <MetricRow
-            items={[
-              { label: "Request", value: "PR-3091", detail: "Seeded procurement ticket", tone: "blue" },
-              { label: "Material", value: "AL-6061", detail: "0.375 plate", tone: "slate" },
-              { label: "Quantity", value: "12 sheets", detail: "Requested by scheduler", tone: "amber" },
-              { label: "Priority", value: "Approval", detail: "Waiting on buyer review", tone: "rose" }
-            ]}
-          />
-          <DataTableShell title="Request details" subtitle="Placeholder for purchasing review and supplier selection.">
-            <TinyTable
-              columns={["Field", "Value", "Notes"]}
-              rows={[
-                ["Requested by", "Scheduler", "Created from shortage impact"],
-                ["Need date", "Jun 02", "Driven by J-2099 schedule"],
-                ["Status", <StatusBadge label="Purchase Requested" />, "No supplier yet"]
+    case "material-al6061":
+      {
+        const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
+        const rows = getBlockedJobsByMaterialShortage(jobs, materials);
+        const breakdown = getMaterialReservationBreakdown(materials, jobs);
+        const supplier = getMaterialSupplierPanel(materials);
+
+        return (
+          <div className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <EntityLink href="/materials/al-6061-plt-0.375">AL-6061-PLT-0.375</EntityLink>
+                    <StatusBadge label="Shortage" />
+                    <StatusBadge label="Blocked Job" />
+                    <SeverityBadge severity="Critical" />
+                  </div>
+                  <div className="grid gap-x-4 gap-y-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
+                    <div>Material name: <span className="font-medium text-slate-950">{material?.name ?? "Aluminum Plate 6061, 3/8 inch"}</span></div>
+                    <div>Supplier: <span className="font-medium text-slate-950">{supplier.preferredSupplier}</span></div>
+                    <div>Lead time: <span className="font-medium text-slate-950">{supplier.leadTimeBusinessDays} business days</span></div>
+                    <div>Last updated: <span className="font-medium text-slate-950">{material?.lastUpdated ?? "Today 9:15 AM"}</span></div>
+                  </div>
+                </div>
+                <Link
+                  href="/jobs/j-2099/material-impact"
+                  className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                >
+                  View J-2099 job impact
+                </Link>
+              </div>
+            </div>
+
+            <MetricRow
+              items={[
+                { label: "On hand", value: `${material?.onHand ?? 12} sheets`, detail: "Physical inventory", tone: "blue" },
+                { label: "Reserved", value: `${material?.reserved ?? 8} sheets`, detail: "Held for open jobs", tone: "amber" },
+                { label: "Available", value: `${material?.available ?? 4} sheets`, detail: "Free for new work", tone: "emerald" },
+                { label: "Required by open jobs", value: `${material?.requiredSheets ?? 48} sheets`, detail: "Driven by J-2099", tone: "slate" },
+                { label: "Shortage", value: `${material?.shortage ?? 44} sheets`, detail: "Current gap", tone: "rose" },
+                { label: "Reorder point", value: `${material?.reorderPoint ?? 20} sheets`, detail: "Triggers replenishment", tone: "amber" }
               ]}
             />
-          </DataTableShell>
-        </>
-      );
+
+            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+              <DataTableShell title="Affected jobs" subtitle="Jobs that are blocked, reserved, or at risk because of the shortage.">
+                <TinyTable
+                  columns={["Job", "Customer", "Needs", "Status", "Due date"]}
+                  rows={rows.map((row) => [
+                    <EntityLink href={row.href}>{row.jobId}</EntityLink>,
+                    row.customerName,
+                    `${row.requiredSheets} sheets`,
+                    row.status === "blocked" ? (
+                      <StatusBadge label="Blocked Job" />
+                    ) : row.status === "reserved" ? (
+                      <StatusBadge label="Reserved" />
+                    ) : (
+                      <SeverityBadge severity="Warning" />
+                    ),
+                    row.dueDate
+                  ])}
+                />
+              </DataTableShell>
+
+              <TimelineShell title="Reservation breakdown" subtitle="Where the sheets are currently allocated.">
+                <div className="space-y-3">
+                  {breakdown.map((item) => (
+                    <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
+                      <span className="text-slate-700">{item.label}</span>
+                      <span className="font-medium text-slate-950">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </TimelineShell>
+            </div>
+
+            <TimelineShell title="Supplier panel" subtitle="The material can be replenished from the preferred supplier.">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Preferred supplier</div>
+                  <div className="mt-2 text-sm font-medium text-slate-950">{supplier.preferredSupplier}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Contact</div>
+                  <div className="mt-2 text-sm font-medium text-slate-950">{supplier.contact}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Lead time</div>
+                  <div className="mt-2 text-sm font-medium text-slate-950">{supplier.leadTimeBusinessDays} business days</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Last purchase price</div>
+                  <div className="mt-2 text-sm font-medium text-slate-950">${supplier.lastPurchasePrice}/sheet</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Minimum order quantity</div>
+                  <div className="mt-2 text-sm font-medium text-slate-950">{supplier.minimumOrderQuantity} sheets</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Suggested order quantity</div>
+                  <div className="mt-2 text-sm font-medium text-slate-950">{supplier.suggestedOrderQuantity} sheets</div>
+                </div>
+              </div>
+            </TimelineShell>
+          </div>
+        );
+      }
+
+    case "job-2099-material":
+      {
+        const job = getJobById("J-2099", jobs);
+        const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
+        const supplier = getMaterialSupplierPanel(materials);
+        const timeline = getMaterialImpactTimeline(materialImpactTimeline);
+
+        return (
+          <div className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <EntityLink href="/jobs/j-2099/material-impact">J-2099</EntityLink>
+                    <StatusBadge label={job?.status ?? "Waiting on Material"} />
+                    <SeverityBadge severity="Critical" />
+                  </div>
+                  <div className="grid gap-x-4 gap-y-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
+                    <div>Customer: <span className="font-medium text-slate-950">{job?.customerName ?? "Apex Rail Components"}</span></div>
+                    <div>Part: <span className="font-medium text-slate-950">{job?.part ?? "Mounting Plate Set Rev C"}</span></div>
+                    <div>Quantity: <span className="font-medium text-slate-950">{job?.quantity ?? 120}</span></div>
+                    <div>Due date: <span className="font-medium text-slate-950">{job?.dueDate ?? "within 4 business days"}</span></div>
+                    <div>Risk: <span className="font-medium text-rose-700">{job?.risk ?? "High"}</span></div>
+                    <div>Blocked step: <span className="font-medium text-slate-950">{job?.blockedStep ?? "CNC Mill"}</span></div>
+                    <div>Work center: <span className="font-medium text-slate-950">{job?.workCenter ?? "CNC Mill"}</span></div>
+                    <div>Current status: <span className="font-medium text-slate-950">{job?.status ?? "Waiting on Material"}</span></div>
+                  </div>
+                </div>
+                <Link
+                  href="/purchase-requests/pr-3091"
+                  className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                >
+                  Create purchase request
+                </Link>
+              </div>
+            </div>
+
+            <RiskAlert
+              severity="Critical"
+              title="Production blocked by material shortage"
+              description="The shortage is 44 sheets and CNC Mill cannot start until material receipt clears the queue."
+              href="/purchase-requests/pr-3091"
+              actionLabel="Create purchase request"
+            />
+
+            <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+              <div className="space-y-4">
+                <TimelineShell title="Impact panel" subtitle="Shortage ripples into production readiness.">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Required material</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">{material?.sku ?? "AL-6061-PLT-0.375"}</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Required quantity</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">{material?.requiredSheets ?? 48} sheets</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Available quantity</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">{material?.available ?? 4} sheets</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Shortage</div>
+                      <div className="mt-2 text-sm font-medium text-rose-700">{material?.shortage ?? 44} sheets</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Supplier lead time</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">{supplier.leadTimeBusinessDays} business days</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Scheduler note</div>
+                      <div className="mt-2 text-sm leading-6 text-slate-700">
+                        CNC slot may need to be moved if material arrives after planned start.
+                      </div>
+                    </div>
+                  </div>
+                </TimelineShell>
+
+                <TimelineShell title="Inventory breakdown" subtitle="Reservation math that explains the blocked job.">
+                  <div className="space-y-3">
+                    {getMaterialReservationBreakdown(materials, jobs).map((item) => (
+                      <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
+                        <span className="text-slate-700">{item.label}</span>
+                        <span className="font-medium text-slate-950">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </TimelineShell>
+              </div>
+
+              <div className="space-y-4">
+                <TimelineShell title="Timeline" subtitle="Production and procurement events leading to the shortage.">
+                  <div className="space-y-3">
+                    {timeline.map((entry) => (
+                      <div key={`${entry.timestamp}-${entry.title}`} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-slate-950">{entry.title}</div>
+                          <SeverityBadge severity={entry.severity} />
+                        </div>
+                        <p className="mt-1 text-sm leading-6 text-slate-600">{entry.detail}</p>
+                        <div className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{entry.timestamp}</div>
+                      </div>
+                    ))}
+                  </div>
+                </TimelineShell>
+
+                <TimelineShell title="Supplier panel" subtitle="The same supplier profile feeds the purchase request screen.">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Preferred supplier</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">{supplier.preferredSupplier}</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Lead time</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">{supplier.leadTimeBusinessDays} business days</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Last purchase price</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">${supplier.lastPurchasePrice}/sheet</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Suggested order quantity</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">{supplier.suggestedOrderQuantity} sheets</div>
+                    </div>
+                  </div>
+                </TimelineShell>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+    case "purchase-request":
+      {
+        const pr = getPurchaseRequestById("PR-3091", purchaseRequests);
+        const state = getPurchaseRequestState(purchaseRequestState);
+        const auditTrail = getPurchaseRequestAuditEntries(pr3091AuditTrail);
+        const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
+
+        return (
+          <div className="space-y-4">
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                    Purchase request created
+                  </div>
+                  <h3 className="text-[15px] font-semibold text-emerald-950">
+                    Purchase request PR-3091 created and linked to Job J-2099.
+                  </h3>
+                  <p className="max-w-3xl text-sm leading-6 text-emerald-900/80">
+                    The blocked job now has a procurement action attached to it instead of a manual spreadsheet chase.
+                  </p>
+                </div>
+                <StatusBadge label={pr?.status ?? "Submitted"} />
+              </div>
+            </div>
+
+            <MetricRow
+              items={[
+                { label: "Purchase request", value: pr?.id ?? "PR-3091", detail: "Linked to J-2099", tone: "blue" },
+                { label: "Material", value: pr?.materialSku ?? "AL-6061-PLT-0.375", detail: material?.name ?? "Aluminum Plate 6061, 3/8 inch", tone: "slate" },
+                { label: "Quantity", value: `${pr?.quantity ?? 50} sheets`, detail: "Supplier order quantity", tone: "amber" },
+                { label: "Estimated total", value: `$${(pr?.estimatedTotal ?? 9250).toLocaleString()}`, detail: `Unit cost $${pr?.unitCost ?? 185}/sheet`, tone: "emerald" }
+              ]}
+            />
+
+            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+              <DataTableShell title="Purchase request card" subtitle="Seeded purchasing record tied back to the blocked job.">
+                <div className="grid gap-3 p-4 md:grid-cols-2">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Purchase Request</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">{pr?.id ?? "PR-3091"}</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Material</div>
+                    <EntityLink href="/materials/al-6061-plt-0.375" className="mt-2 inline-flex">
+                      {pr?.materialSku ?? "AL-6061-PLT-0.375"}
+                    </EntityLink>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Supplier</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">{pr?.supplier ?? "Midwest Metals Supply"}</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Quantity</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">{pr?.quantity ?? 50} sheets</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Unit cost</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">${pr?.unitCost ?? 185}</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Estimated total</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">${(pr?.estimatedTotal ?? 9250).toLocaleString()}</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Linked job</div>
+                    <EntityLink href="/jobs/j-2099/material-impact" className="mt-2 inline-flex">
+                      {pr?.linkedJobId ?? "J-2099"}
+                    </EntityLink>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Buyer</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">{pr?.buyer ?? "Priya Mehta"}</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Status</div>
+                    <div className="mt-2"><StatusBadge label={pr?.status ?? "Submitted"} /></div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Priority</div>
+                    <div className="mt-2"><SeverityBadge severity={pr?.priority === "High" ? "Critical" : "Approval"} /></div>
+                  </div>
+                </div>
+              </DataTableShell>
+
+              <TimelineShell title="Before / after state" subtitle="The materials and job state stay traceable through the request.">
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Before</div>
+                    <div className="mt-2 space-y-1 text-sm text-slate-700">
+                      <div>Material status: <span className="font-medium text-slate-950">{state.before.materialStatus}</span></div>
+                      <div>Job J-2099: <span className="font-medium text-slate-950">{state.before.jobStatus}</span></div>
+                      <div>Action needed: <span className="font-medium text-slate-950">{state.before.actionNeeded}</span></div>
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">After</div>
+                    <div className="mt-2 space-y-1 text-sm text-slate-700">
+                      <div>Material status: <span className="font-medium text-slate-950">{state.after.materialStatus}</span></div>
+                      <div>Job J-2099: <span className="font-medium text-slate-950">{state.after.jobStatus}</span></div>
+                      <div>Next step: <span className="font-medium text-slate-950">{state.after.nextStep}</span></div>
+                    </div>
+                  </div>
+                </div>
+              </TimelineShell>
+            </div>
+
+            <AuditPanel
+              title="Audit trail"
+              subtitle="Standardized purchasing events link the request back to production readiness."
+              items={auditTrail.map((entry) => ({
+                actor: entry.actor,
+                actorRole: entry.role,
+                event: entry.action,
+                time: entry.timestamp,
+                detail: entry.result,
+                severity: entry.severity,
+                entityHref: entry.entityType === "PurchaseRequest" ? "/purchase-requests/pr-3091" : "/jobs/j-2099/material-impact",
+                entityLabel: entry.entityId,
+                result: entry.result,
+                notes: entry.notes,
+                entityType: entry.entityType
+              }))}
+            />
+
+            <div className="flex justify-end">
+              <Link
+                href="/quotes/q-1003"
+                className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                Review high-value quote approval Q-1003
+              </Link>
+            </div>
+          </div>
+        );
+      }
 
     case "quotes":
       return (

@@ -1,15 +1,23 @@
 import type {
   AuditEvent,
   CapacitySummary,
+  DefectReasonBreakdownRow,
   Customer,
   CustomerSafeJobStatus,
   DashboardMetrics,
   DashboardRiskItem,
+  InspectionQueueRow,
   Job,
   Material,
+  MaterialDashboardRow,
+  MaterialReservationBreakdownRow,
+  MaterialTimelineEntry,
   PurchaseRequest,
+  PurchaseRequestAuditEntry,
+  PurchaseRequestState,
   Quote,
   ProductionQueueRow,
+  QualitySummary,
   ReworkOrder,
   WorkCenterCapacityRow,
   WorkCenter
@@ -180,6 +188,170 @@ export function getDashboardRiskItems(
   }
 
   return items;
+}
+
+export function getQualitySummary(
+  jobs: Job[],
+  reworkOrders: ReworkOrder[],
+  inspectionQueueRows: InspectionQueueRow[]
+): QualitySummary {
+  const openInspections = inspectionQueueRows.filter(
+    (row) => row.status !== "Passed" && row.status !== "Approved"
+  ).length;
+  const failedInspections = inspectionQueueRows.filter((row) => row.result === "Failed").length;
+  const scrapAboveTolerance = jobs.filter((job) => job.status === "Scrap Approval Required").length;
+  const reworkOrdersOpen = reworkOrders.filter((order) => order.status === "Open").length;
+  const jobsWaitingForSignOff = inspectionQueueRows.filter((row) =>
+    row.status === "Pending Inspection" ||
+    row.status === "Scrap Approval Required" ||
+    row.status === "Waiting Supervisor Review"
+  ).length;
+
+  const inspectedJobs = jobs.filter(
+    (job) =>
+      typeof job.completedQuantity === "number" &&
+      typeof job.scrapQuantity === "number" &&
+      job.completedQuantity > 0
+  );
+
+  const totalCompleted = inspectedJobs.reduce(
+    (sum, job) => sum + (job.completedQuantity ?? 0),
+    0
+  );
+  const totalGood = inspectedJobs.reduce(
+    (sum, job) =>
+      sum + Math.max((job.completedQuantity ?? 0) - (job.scrapQuantity ?? 0), 0),
+    0
+  );
+
+  const averageFirstPassYield =
+    totalCompleted > 0 ? Math.round((totalGood / totalCompleted) * 1000) / 10 : 0;
+
+  return {
+    openInspections,
+    failedInspections,
+    scrapAboveTolerance,
+    reworkOrdersOpen,
+    jobsWaitingForSignOff,
+    averageFirstPassYield
+  };
+}
+
+export function getInspectionQueue(rows: InspectionQueueRow[]) {
+  return rows;
+}
+
+export function getDefectReasonBreakdown(rows: DefectReasonBreakdownRow[]) {
+  return rows.slice().sort((a, b) => b.count - a.count);
+}
+
+export function getMaterialsSummary(
+  materials: Material[],
+  jobs: Job[],
+  purchaseRequests: PurchaseRequest[]
+) {
+  const belowReorderPoint = materials.filter(
+    (material) => material.available <= (material.reorderPoint ?? material.requiredSheets)
+  ).length;
+  const jobsBlockedByShortage = jobs.filter((job) => job.status === "Waiting on Material").length;
+  const openPurchaseRequests = purchaseRequests.filter((request) => request.status === "Submitted").length;
+  const incomingPosThisWeek = purchaseRequests.filter((request) => request.status === "Submitted").length;
+  const reservedInventoryValue = materials.reduce((sum, material) => sum + material.reserved * material.lastPurchasePrice, 0);
+  const criticalShortages = materials.filter((material) => material.shortage > 0).length;
+
+  return {
+    materialsBelowReorderPoint: belowReorderPoint,
+    jobsBlockedByShortage,
+    openPurchaseRequests,
+    incomingPosThisWeek,
+    reservedInventoryValue,
+    criticalShortages
+  };
+}
+
+export function getMaterialRows(
+  materials: Material[],
+  jobs: Job[] = []
+): MaterialDashboardRow[] {
+  return materials.map((material) => ({
+    sku: material.sku,
+    name: material.name,
+    onHand: material.onHand,
+    reserved: material.reserved,
+    available: material.available,
+    reorderPoint: material.reorderPoint ?? 0,
+    shortage: material.shortage,
+    supplier: material.supplier,
+    affectedJobIds: jobs.filter((job) => job.requiredMaterial === material.sku).map((job) => job.id),
+    status:
+      material.shortage > 0
+        ? "Blocked Job"
+        : material.available <= (material.reorderPoint ?? 0)
+          ? "Shortage"
+          : "Available",
+    action: material.shortage > 0 ? "View job impact" : "Open material record",
+    href: `/materials/${material.sku.toLowerCase()}`
+  }));
+}
+
+export function getBlockedJobsByMaterialShortage(jobs: Job[], materials: Material[]) {
+  const shortageBySku = new Map(materials.map((material) => [material.sku, material.shortage]));
+
+  return jobs
+    .filter((job) => job.status === "Waiting on Material" || (job.requiredMaterial && (shortageBySku.get(job.requiredMaterial) ?? 0) > 0))
+    .map((job) => ({
+      jobId: job.id,
+      customerName: job.customerName,
+      requiredSheets: job.id === "J-2099" ? 48 : job.id === "J-2035" ? 8 : 16,
+      status:
+        job.id === "J-2099" ? ("blocked" as const) : job.id === "J-2035" ? ("reserved" as const) : ("at risk" as const),
+      dueDate:
+        job.id === "J-2099"
+          ? "Due in 4 business days"
+          : job.id === "J-2035"
+            ? "In production"
+            : "Due soon",
+      href:
+        job.id === "J-2099"
+          ? "/jobs/j-2099/material-impact"
+          : job.id === "J-2035"
+            ? "/jobs/j-2035"
+            : "/jobs"
+    }));
+}
+
+export function getMaterialReservationBreakdown(materials: Material[], jobs: Job[]) {
+  const material = materials.find((entry) => entry.sku === "AL-6061-PLT-0.375");
+  return [
+    { label: "Reserved for J-2035", value: `${jobs.some((job) => job.id === "J-2035") ? 8 : material?.reserved ?? 0} sheets` },
+    { label: "Available for new work", value: `${material?.available ?? 0} sheets` },
+    { label: "Required for J-2099", value: "48 sheets" },
+    { label: "Remaining shortage", value: `${material?.shortage ?? 44} sheets` }
+  ] satisfies MaterialReservationBreakdownRow[];
+}
+
+export function getMaterialSupplierPanel(materials: Material[]) {
+  const material = materials.find((entry) => entry.sku === "AL-6061-PLT-0.375");
+  return {
+    preferredSupplier: material?.supplier ?? "Midwest Metals Supply",
+    contact: material?.contactEmail ?? "purchasing@midwestmetals.example",
+    leadTimeBusinessDays: material?.leadTimeBusinessDays ?? 3,
+    lastPurchasePrice: material?.lastPurchasePrice ?? 185,
+    minimumOrderQuantity: material?.minimumOrderQuantity ?? 25,
+    suggestedOrderQuantity: material?.suggestedOrderQuantity ?? 50
+  };
+}
+
+export function getMaterialImpactTimeline(rows: MaterialTimelineEntry[]) {
+  return rows;
+}
+
+export function getPurchaseRequestState(state: PurchaseRequestState) {
+  return state;
+}
+
+export function getPurchaseRequestAuditEntries(entries: PurchaseRequestAuditEntry[]) {
+  return entries;
 }
 
 export function getCapacitySummary(workCenters: WorkCenter[]): CapacitySummary {

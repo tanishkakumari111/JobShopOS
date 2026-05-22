@@ -67,7 +67,7 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
   },
   "job-2035": {
     path: "/jobs/j-2035",
-    title: "Job Detail — J-2035",
+    title: "Job Detail - J-2035",
     summary: "Primary production record with routing, status, capacity impact, and linked materials.",
     action: "Print Traveler",
     audience: "internal",
@@ -77,7 +77,7 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
   },
   "work-order-traveler": {
     path: "/output/work-order-traveler/j-2035",
-    title: "Work Order Traveler — J-2035",
+    title: "Work Order Traveler - J-2035",
     summary: "Printable traveler view with routing, materials, sign-off checkpoints, and traceability.",
     action: "Print Traveler",
     audience: "internal",
@@ -87,56 +87,71 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
   },
   quality: {
     path: "/quality",
-    title: "Quality",
+    title: "Quality Dashboard",
     summary: "Inspection queue, exceptions, and release state across the floor.",
-    action: "Review inspections",
-    audience: "internal"
+    action: "Review quality",
+    audience: "internal",
+    demoStep: 5,
+    presenterNote:
+      "Now the demo shifts into exception handling. JobShop OS keeps scrap and inspection problems visible before they leak into production."
   },
   "quality-scrap": {
     path: "/quality/j-2042/scrap-approval",
-    title: "Quality Exception",
+    title: "Scrap Approval - J-2042",
     summary: "Scrap approval flow for a failed inspection with controlled follow-up.",
     action: "Approve scrap",
     audience: "internal",
-    demoStep: 5
+    demoStep: 5,
+    presenterNote:
+      "Scrap above tolerance blocks production. A supervisor must decide whether to approve scrap, reject the log, or hold the job for engineering review."
   },
   "quality-rework": {
     path: "/quality/j-2042/rework-created",
-    title: "Rework Created",
+    title: "Rework Created - RW-2042-01",
     summary: "Rework record linked back to the original inspection and material lot.",
     action: "Open rework",
     audience: "internal",
-    demoStep: 6
+    demoStep: 6,
+    presenterNote:
+      "The issue is no longer just a note in a spreadsheet. JobShop OS turns the quality failure into controlled rework with full traceability."
   },
   materials: {
     path: "/materials",
-    title: "Materials",
+    title: "Materials Dashboard",
     summary: "Inventory positions, shortages, reservations, and purchasing signals.",
-    action: "Inspect stock",
-    audience: "internal"
+    action: "Review materials",
+    audience: "internal",
+    demoStep: 7,
+    presenterNote:
+      "Material readiness is visible before a job reaches the floor. JobShop OS shows shortages early so scheduling can react before production stalls."
   },
   "material-al6061": {
     path: "/materials/al-6061-plt-0.375",
-    title: "Material AL-6061-PLT-0.375",
+    title: "Material Detail - AL-6061-PLT-0.375",
     summary: "Seed-ready material record with reservations and procurement history.",
-    action: "View lot history",
-    audience: "internal"
-  },
-  "job-2099-material": {
-    path: "/jobs/j-2099/material-impact",
-    title: "Material Shortage Impact",
-    summary: "Impact analysis showing how a shortage flows into the job schedule.",
-    action: "Open shortage",
+    action: "View J-2099 job impact",
     audience: "internal",
     demoStep: 7
   },
+  "job-2099-material": {
+    path: "/jobs/j-2099/material-impact",
+    title: "Material Impact - J-2099",
+    summary: "Impact analysis showing how a shortage flows into the job schedule.",
+    action: "Create purchase request",
+    audience: "internal",
+    demoStep: 7,
+    presenterNote:
+      "Material shortage is not just an inventory issue. It directly blocks production readiness and changes the schedule."
+  },
   "purchase-request": {
     path: "/purchase-requests/pr-3091",
-    title: "Purchase Request PR-3091",
+    title: "Purchase Request - PR-3091",
     summary: "Seeded procurement request linked to the affected job and material need.",
-    action: "Review request",
+    action: "Review high-value quote",
     audience: "internal",
-    demoStep: 8
+    demoStep: 8,
+    presenterNote:
+      "Instead of a buyer manually chasing spreadsheets, JobShop OS creates a purchase request directly from the blocked job and links it back to production readiness."
   },
   quotes: {
     path: "/quotes",
@@ -237,9 +252,10 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
   }
 };
 
-export const routeMetaByPath = Object.values(routeMeta).reduce<
-  Record<string, RouteMeta>
->((acc, meta) => {
-  acc[meta.path] = meta;
-  return acc;
-}, {});
+export const routeMetaByPath = Object.values(routeMeta).reduce<Record<string, RouteMeta>>(
+  (acc, meta) => {
+    acc[meta.path] = meta;
+    return acc;
+  },
+  {}
+);

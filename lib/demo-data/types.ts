@@ -62,6 +62,68 @@ export type ProductionUpdate = {
   status: "Complete" | "Pending" | "Watch" | "Info";
 };
 
+export type InspectionQueueRow = {
+  jobId: string;
+  customerName: string;
+  part: string;
+  currentStep: string;
+  inspector: string;
+  result: "Passed" | "Failed" | "Pending";
+  scrapRate: string;
+  status:
+    | "Pending Inspection"
+    | "Failed"
+    | "Scrap Approval Required"
+    | "Waiting Supervisor Review"
+    | "Passed"
+    | "Approved";
+  dueDate: string;
+  action: string;
+  href: string;
+};
+
+export type DefectReasonBreakdownRow = {
+  reason: string;
+  count: number;
+  percentage: number;
+};
+
+export type QualityTimelineEntry = {
+  title: string;
+  detail: string;
+  timestamp: string;
+  severity: "Info" | "Warning" | "Critical" | "Blocked" | "Approval" | "Automation" | "Success";
+};
+
+export type QualitySummary = {
+  openInspections: number;
+  failedInspections: number;
+  scrapAboveTolerance: number;
+  reworkOrdersOpen: number;
+  jobsWaitingForSignOff: number;
+  averageFirstPassYield: number;
+};
+
+export type ScrapEventDetail = {
+  reportedBy: string;
+  reportedAt: string;
+  reason: string;
+  operatorNote: string;
+  inspectionNote: string;
+};
+
+export type AuditTrailEntry = {
+  timestamp: string;
+  actor: string;
+  actorRole: string;
+  action: string;
+  entityType: "quote" | "job" | "workOrder" | "material" | "purchaseRequest" | "report" | "quality" | "capacity" | "reworkOrder";
+  entityId: string;
+  result: string;
+  notes: string;
+  severity: "Info" | "Warning" | "Critical" | "Blocked" | "Approval" | "Automation" | "Success";
+};
+
 export type Job = {
   id: string;
   slug: string;
@@ -137,6 +199,71 @@ export type Material = {
   leadTimeBusinessDays: number;
   lastPurchasePrice: number;
   suggestedOrderQuantity: number;
+  reorderPoint?: number;
+  contactEmail?: string;
+  lastUpdated?: string;
+  minimumOrderQuantity?: number;
+};
+
+export type MaterialDashboardRow = {
+  sku: string;
+  name: string;
+  onHand: number;
+  reserved: number;
+  available: number;
+  reorderPoint: number;
+  shortage: number;
+  supplier: string;
+  affectedJobIds: string[];
+  status: "Available" | "Low Stock" | "Shortage" | "Purchase Requested" | "Blocked Job";
+  action: string;
+  href: string;
+};
+
+export type MaterialAffectedJobRow = {
+  jobId: string;
+  customerName: string;
+  requiredSheets: number;
+  status: "blocked" | "reserved" | "at risk";
+  dueDate: string;
+  href: string;
+};
+
+export type MaterialReservationBreakdownRow = {
+  label: string;
+  value: string;
+};
+
+export type MaterialTimelineEntry = {
+  title: string;
+  detail: string;
+  timestamp: string;
+  severity: "Info" | "Warning" | "Critical" | "Blocked" | "Approval" | "Automation" | "Success";
+};
+
+export type PurchaseRequestState = {
+  before: {
+    materialStatus: string;
+    jobStatus: string;
+    actionNeeded: string;
+  };
+  after: {
+    materialStatus: string;
+    jobStatus: string;
+    nextStep: string;
+  };
+};
+
+export type PurchaseRequestAuditEntry = {
+  timestamp: string;
+  actor: string;
+  role: string;
+  action: string;
+  entityType: "PurchaseRequest" | "Job";
+  entityId: string;
+  result: string;
+  notes: string;
+  severity: "Info" | "Warning" | "Critical" | "Blocked" | "Approval" | "Automation" | "Success";
 };
 
 export type PurchaseRequest = {
@@ -161,6 +288,7 @@ export type ReworkOrder = {
   priority: "Low" | "Medium" | "High";
   status: "Open" | "In Progress" | "Complete" | "Closed";
   supervisor: string;
+  nextStep?: string;
 };
 
 export type Report = {

@@ -2,6 +2,7 @@ export type DemoStep = {
   stepNumber: number;
   title: string;
   route: string;
+  aliases?: string[];
   nextRoute?: string;
   previousRoute?: string;
   presenterNote: string;
@@ -46,9 +47,10 @@ export const demoPath: DemoStep[] = [
   {
     stepNumber: 5,
     title: "Quality Exception - J-2042",
-    route: "/quality/j-2042/scrap-approval",
+    route: "/quality",
+    aliases: ["/quality/j-2042/scrap-approval"],
     previousRoute: "/output/work-order-traveler/j-2035",
-    nextRoute: "/quality/j-2042/rework-created",
+    nextRoute: "/quality/j-2042/scrap-approval",
     presenterNote:
       "Demonstrate how a failed inspection becomes a controlled exception instead of a spreadsheet side quest."
   },
@@ -64,7 +66,8 @@ export const demoPath: DemoStep[] = [
   {
     stepNumber: 7,
     title: "Material Shortage - J-2099",
-    route: "/jobs/j-2099/material-impact",
+    route: "/materials",
+    aliases: ["/materials/al-6061-plt-0.375", "/jobs/j-2099/material-impact"],
     previousRoute: "/quality/j-2042/rework-created",
     nextRoute: "/purchase-requests/pr-3091",
     presenterNote:
@@ -126,5 +129,5 @@ export const demoPath: DemoStep[] = [
 ];
 
 export function getDemoStepByRoute(route: string) {
-  return demoPath.find((step) => step.route === route);
+  return demoPath.find((step) => step.route === route || step.aliases?.includes(route));
 }
