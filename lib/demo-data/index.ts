@@ -7,11 +7,13 @@ export { quotes, quoteApprovalRequired } from "./quotes";
 export { reports } from "./reports";
 export { auditEvents } from "./audit-events";
 export { workCenters } from "./work-centers";
+export { demoPath } from "../demo-path";
 export {
   calculateMaterialAvailability,
   calculateMaterialShortage,
   calculateScrapRate,
   requiresOwnerApproval,
+  getDashboardMetrics,
   getAuditEventsByEntity,
   getCapacitySummary,
   getCustomerByName,
@@ -22,6 +24,9 @@ export {
   getMaterialBySku,
   getPurchaseRequestById,
   getQuoteById,
+  getProductionQueue,
+  getRecentAuditEvents,
+  getWorkCenterCapacityRows,
   getReworkOrderById
 } from "./helpers";
 export type {
@@ -29,12 +34,15 @@ export type {
   CapacitySummary,
   Customer,
   CustomerSafeJobStatus,
+  DashboardMetrics,
   DashboardRiskItem,
   Job,
   Material,
   PurchaseRequest,
   Quote,
+  ProductionQueueRow,
   Report,
   ReworkOrder,
+  WorkCenterCapacityRow,
   WorkCenter
 } from "./types";

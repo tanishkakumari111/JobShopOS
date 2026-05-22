@@ -34,17 +34,19 @@ export type RouteMeta = {
   action: string;
   audience: "internal" | "customer";
   demoStep?: DemoStep["stepNumber"];
+  presenterNote?: string;
 };
 
 export const routeMeta: Record<RouteKey, RouteMeta> = {
   home: {
     path: "/",
     title: "Production Command Center",
-    summary:
-      "Operational snapshot for scheduling, shortages, quality risk, and customer commitments.",
-    action: "Create quote",
+    summary: "Live production health, risks, bottlenecks, and demo path for JobShop OS.",
+    action: "Begin walkthrough",
     audience: "internal",
-    demoStep: 1
+    demoStep: 1,
+    presenterNote:
+      "Start with the full shop view. JobShop OS surfaces production risk before it becomes missed delivery, hidden scrap, or customer escalation."
   },
   capacity: {
     path: "/capacity",

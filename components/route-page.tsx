@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { FileText, Plus } from "lucide-react";
 import { DemoStepper } from "@/components/demo-stepper";
 import { PresenterNote } from "@/components/presenter-note";
@@ -24,16 +25,21 @@ import {
   getCapacitySummary,
   getCustomerSafeJobStatus,
   getDashboardRiskItems,
+  getDashboardMetrics,
   getJobById,
   getMaterialBySku,
   getPurchaseRequestById,
   getQuoteById,
+  getProductionQueue,
+  getRecentAuditEvents,
   getReworkOrderById,
   jobs,
   materials,
   purchaseRequests,
   quotes,
   reworkOrders,
+  demoPath,
+  getWorkCenterCapacityRows,
   workCenters
 } from "@/lib/demo-data";
 
@@ -155,102 +161,214 @@ function routeBlocks(routeKey: RouteKey) {
   switch (routeKey) {
     case "home":
       {
+        const metrics = getDashboardMetrics(jobs, workCenters, auditEvents, reworkOrders);
         const capacitySummary = getCapacitySummary(workCenters);
-        const risks = getDashboardRiskItems(jobs, quotes, materials);
+        const risks = getDashboardRiskItems(jobs, quotes, materials, workCenters);
+        const productionQueue = getProductionQueue(jobs);
+        const capacityRows = getWorkCenterCapacityRows(workCenters);
+        const recentAudit = getRecentAuditEvents(5);
 
         return (
           <>
             <MetricRow
               items={[
                 {
-                  label: "Open jobs",
-                  value: `${jobs.length}`,
-                  detail: `${jobs.filter((job) => job.status === "In Production" || job.status === "Waiting on Material").length} active exceptions`,
+                  label: "Active jobs",
+                  value: `${metrics.activeJobs}`,
+                  detail: "Released or in flight",
                   tone: "blue"
                 },
                 {
-                  label: "Capacity bottleneck",
-                  value: capacitySummary.bottleneckLabel,
-                  detail: `${capacitySummary.utilization}% load`,
+                  label: "At-risk jobs",
+                  value: `${metrics.atRiskJobs}`,
+                  detail: "Watch, high, or critical",
                   tone: "amber"
                 },
                 {
-                  label: "Quality holds",
-                  value: `${jobs.filter((job) => job.status === "Scrap Approval Required").length}`,
-                  detail: `${jobs.find((job) => job.id === "J-2042")?.id ?? "J-2042"} needs approval`,
+                  label: "WIP value",
+                  value: `$${metrics.wipValue.toLocaleString()}`,
+                  detail: "Estimated active work",
                   tone: "rose"
                 },
                 {
-                  label: "On-time promise",
-                  value: "96.4%",
-                  detail: "Based on seeded schedule",
+                  label: "Jobs due this week",
+                  value: `${metrics.jobsDueThisWeek}`,
+                  detail: "Friday commitments seeded",
+                  tone: "emerald"
+                },
+                {
+                  label: "Scrap / rework",
+                  value: `${metrics.scrapReworkCount}`,
+                  detail: "Disposition and follow-up",
+                  tone: "amber"
+                },
+                {
+                  label: "Material blockers",
+                  value: `${metrics.materialBlockers}`,
+                  detail: "Waiting on material flow",
+                  tone: "rose"
+                },
+                {
+                  label: "Capacity bottlenecks",
+                  value: `${metrics.capacityBottlenecks}`,
+                  detail: capacitySummary.bottleneckLabel,
+                  tone: "blue"
+                },
+                {
+                  label: "Audit events today",
+                  value: `${metrics.auditEventsToday}`,
+                  detail: "Traceability already captured",
                   tone: "emerald"
                 }
               ]}
             />
 
-            <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-              <RiskAlert
-                severity={risks[0]?.severity ?? "Critical"}
-                title={risks[0]?.title ?? "Press Brake is constraining the queue"}
-                description={risks[0]?.description ?? "The scheduler can see the bottleneck before jobs are released."}
-                href={risks[0]?.href ?? "/capacity"}
-                actionLabel="Inspect capacity"
-              />
-              <TimelineShell
-                title="Recent operational signals"
-                subtitle="Seeded events that later become live notifications."
+            <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+              <DataTableShell
+                title="Operational Risks"
+                subtitle="Issues the shop needs to act on before they become a missed promise."
               >
-                <div className="space-y-3">
-                  {jobs
-                    .filter((job) => ["J-2035", "J-2099", "J-2042"].includes(job.id))
-                    .map((job) => (
-                      <div
-                        key={job.id}
-                        className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5"
-                      >
-                        <div>
-                          <div className="text-sm font-medium">
-                            {job.id} moved to {job.status.toLowerCase()}
+                <div className="space-y-3 p-4">
+                  {risks.map((risk) => (
+                    <div key={risk.id} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <SeverityBadge severity={risk.severity} />
+                            <EntityLink href={risk.href}>{risk.entityLabel}</EntityLink>
                           </div>
-                          <div className="text-xs text-slate-500">
-                            {job.customerName} - {job.part}
-                          </div>
+                          <h3 className="text-sm font-semibold text-slate-950">{risk.title}</h3>
+                          <p className="text-sm leading-6 text-slate-600">{risk.description}</p>
                         </div>
-                        <StatusBadge label={job.status} />
+                        <Link
+                          href={risk.href}
+                          className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                        >
+                          {risk.ctaLabel ?? "Open"}
+                        </Link>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </DataTableShell>
+
+              <TimelineShell title="Founder Demo Path" subtitle="Step 1 active. 13 steps total.">
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Step 1 active
+                    </div>
+                    <div className="mt-2 text-sm font-semibold text-slate-950">Production Command Center</div>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                      Risk appears - right person acts - system updates - audit trail proves it.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {demoPath.slice(0, 4).map((step) => (
+                      <Link
+                        key={step.route}
+                        href={step.route}
+                        className="flex items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+                      >
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 bg-slate-50 font-mono text-[11px] font-semibold text-slate-700">
+                          {step.stepNumber}
+                        </span>
+                        <span className="font-medium">{step.title}</span>
+                      </Link>
                     ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href="/capacity"
+                      className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                    >
+                      Begin Walkthrough
+                    </Link>
+                    <span className="text-xs text-slate-500">Starts the founder demo at the bottleneck.</span>
+                  </div>
                 </div>
               </TimelineShell>
             </div>
 
+            <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+              <DataTableShell title="Capacity snapshot" subtitle="Work-center load across the seeded shop floor.">
+                <TinyTable
+                  columns={["Work center", "Capacity", "Queued", "Utilization", "Status"]}
+                  rows={capacityRows.map((workCenter) => [
+                    workCenter.name,
+                    `${workCenter.capacityHoursPerWeek}h`,
+                    workCenter.name === "Press Brake" ? (
+                      <span className="font-semibold text-rose-700">{workCenter.queuedHoursPerWeek}h</span>
+                    ) : (
+                      `${workCenter.queuedHoursPerWeek}h`
+                    ),
+                    workCenter.name === "Press Brake" ? (
+                      <span className="font-semibold text-rose-700">{workCenter.utilization}%</span>
+                    ) : (
+                      `${workCenter.utilization}%`
+                    ),
+                    <StatusBadge label={workCenter.status} />
+                  ])}
+                />
+              </DataTableShell>
+
+              <AuditPanel
+                title="Recent audit activity"
+                subtitle="Latest seeded events from the founder demo path."
+                items={recentAudit.map((event) => ({
+                  actor: event.actor,
+                  event: event.title,
+                  time: event.timestamp,
+                  detail: event.detail,
+                  severity: event.severity,
+                  entityHref:
+                    event.entityType === "quote"
+                      ? "/quotes/q-1003"
+                      : event.entityType === "job"
+                        ? event.entityId === "J-2099"
+                          ? "/jobs/j-2099/material-impact"
+                          : "/jobs/j-2035"
+                        : event.entityType === "workOrder"
+                          ? event.entityId === "WO-2035"
+                            ? "/output/work-order-traveler/j-2035"
+                            : "/quotes/q-1003"
+                          : event.entityType === "material"
+                            ? "/jobs/j-2099/material-impact"
+                            : event.entityType === "purchaseRequest"
+                              ? "/purchase-requests/pr-3091"
+                              : event.entityType === "report"
+                                ? "/reports/customer-status/j-2035"
+                                : event.entityType === "quality"
+                                  ? "/quality/j-2042/scrap-approval"
+                                  : "/capacity",
+                  entityLabel: event.entityId
+                }))}
+              />
+              <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-xs leading-6 text-slate-500 xl:col-span-2">
+                Also seeded in the trace: PR-3091 purchase request creation and customer report generation/saving for
+                J-2035.
+              </div>
+            </div>
+
             <DataTableShell
-              title="Active exceptions"
-              subtitle="Compact table shell for later operational lists."
-              actions={<EntityLink href="/audit">Open audit trail</EntityLink>}
+              title="Today's production queue"
+              subtitle="The job list behind the operational risks and capacity signals."
+              actions={<EntityLink href="/jobs/j-2035">Open J-2035</EntityLink>}
             >
               <TinyTable
-                columns={["Entity", "Status", "Risk", "Owner"]}
-                rows={[
-                  [
-                    <EntityLink href="/jobs/j-2035">J-2035</EntityLink>,
-                    <StatusBadge label="In Production" />,
-                    <SeverityBadge severity="Warning" />,
-                    "Scheduler"
-                  ],
-                  [
-                    <EntityLink href="/quality/j-2042/scrap-approval">J-2042</EntityLink>,
-                    <StatusBadge label="Scrap Approval Required" />,
-                    <SeverityBadge severity="Critical" />,
-                    "Quality Inspector"
-                  ],
-                  [
-                    <EntityLink href="/purchase-requests/pr-3091">PR-3091</EntityLink>,
-                    <StatusBadge label="Purchase Requested" />,
-                    <SeverityBadge severity="Approval" />,
-                    "Purchasing"
-                  ]
-                ]}
+                columns={["Job", "Customer", "Part", "Status", "Current step", "Work center", "Risk", "Next action"]}
+                rows={productionQueue.map((job) => [
+                  <EntityLink href={job.href}>{job.jobId}</EntityLink>,
+                  job.customerName,
+                  job.part,
+                  <StatusBadge label={job.status} />,
+                  job.currentStep,
+                  job.workCenter,
+                  <SeverityBadge severity={job.risk === "None" ? "Info" : job.risk === "Low" ? "Success" : job.risk === "Watch" ? "Warning" : job.risk === "High" ? "Critical" : "Blocked"} />,
+                  job.nextAction
+                ])}
               />
             </DataTableShell>
           </>
@@ -1123,8 +1241,8 @@ export function RoutePage({ routeKey }: { routeKey: RouteKey }) {
             : "border-slate-200 bg-slate-50 text-slate-700"
         )}
       >
-        Phase 1 keeps the record structure and visual language in place while the actual workflow
-        logic is built later.
+        {meta.presenterNote ??
+          "Phase 1 keeps the record structure and visual language in place while the actual workflow logic is built later."}
       </PresenterNote>
 
       {routeBlocks(routeKey)}

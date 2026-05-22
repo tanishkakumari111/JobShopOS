@@ -153,6 +153,7 @@ export type DashboardRiskItem = {
   severity: "Info" | "Warning" | "Critical" | "Blocked" | "Approval" | "Automation" | "Success";
   href: string;
   entityLabel: string;
+  ctaLabel?: string;
 };
 
 export type CapacitySummary = {
@@ -177,4 +178,35 @@ export type CustomerSafeJobStatus = {
   eta: string;
   risk: string;
   summary: string;
+};
+
+export type DashboardMetrics = {
+  activeJobs: number;
+  atRiskJobs: number;
+  wipValue: number;
+  jobsDueThisWeek: number;
+  scrapReworkCount: number;
+  materialBlockers: number;
+  capacityBottlenecks: number;
+  auditEventsToday: number;
+};
+
+export type ProductionQueueRow = {
+  jobId: string;
+  customerName: string;
+  part: string;
+  status: Job["status"];
+  currentStep: string;
+  workCenter: string;
+  risk: Job["risk"];
+  nextAction: string;
+  href: string;
+};
+
+export type WorkCenterCapacityRow = {
+  name: string;
+  capacityHoursPerWeek: number;
+  queuedHoursPerWeek: number;
+  utilization: number;
+  status: WorkCenter["status"];
 };
