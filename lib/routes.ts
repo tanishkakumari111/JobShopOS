@@ -238,23 +238,28 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
   audit: {
     path: "/audit",
     title: "Audit Trail",
-    summary: "Full traceability stream across quote, job, quality, and procurement events.",
-    action: "Inspect audit",
+    summary: "Complete operational history across quotes, jobs, materials, quality, customer reports, and system events.",
+    action: "Export audit CSV",
     audience: "internal",
-    demoStep: 13
+    demoStep: 13,
+    presenterNote:
+      "The final proof is traceability. JobShop OS records who did what, when, from quote approval to production updates, rework, purchasing, and customer communication."
   },
   "audit-job": {
     path: "/audit/jobs/j-2035",
-    title: "Job Audit Trail",
-    summary: "Job-level event stream with who changed what and when.",
-    action: "Open event detail",
-    audience: "internal"
+    title: "Entity Timeline - J-2035",
+    summary: "Filtered audit trail showing the job lineage and customer report linkage.",
+    action: "View final demo summary",
+    audience: "internal",
+    demoStep: 13,
+    presenterNote:
+      "Show the connected lineage for a single job so the team can see how quote approval, production, reporting, and audit all point back to the same record."
   },
   "demo-summary": {
     path: "/demo/summary",
-    title: "Demo Summary",
-    summary: "Kitchen-sink demo page for the Phase 1 shell, badges, labels, and links.",
-    action: "Walk the demo",
+    title: "JobShop OS Demo Summary",
+    summary: "Closing screen that ties together governance, capacity, production, materials, quality, customer communication, and auditability.",
+    action: "Restart founder demo",
     audience: "internal"
   }
 };

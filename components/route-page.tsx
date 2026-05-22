@@ -15,7 +15,6 @@ import { CustomerSafeViewLabel } from "@/components/customer-safe-view-label";
 import { PrintHeader } from "@/components/print-header";
 import { PrintFooter } from "@/components/print-footer";
 import { PrintButton } from "@/components/print-button";
-import { allStatusGroups } from "@/lib/status";
 import { routeMeta, type RouteKey } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import {
@@ -28,10 +27,14 @@ import {
   getCustomerServiceSummary,
   getCustomerRiskQueue,
   getCustomerStatusReports,
+  getAuditSummary,
+  getAuditEntityQuickFilters,
+  getAuditTimelineRows,
   getDashboardRiskItems,
   getDashboardMetrics,
   getCapacityRiskJobIds,
   getJobById,
+  getJ2035EntityTimeline,
   getJobTraceEvents,
   getMaterialBySku,
   getMaterialsSummary,
@@ -53,6 +56,8 @@ import {
   getDefectReasonBreakdown,
   getRecentAuditEvents,
   getReworkOrderById,
+  getFinalValuePillars,
+  getDemoPathRecap,
   defectReasonBreakdownRows,
   inspectionQueueRows,
   j2042ApprovalAuditTrail,
@@ -3410,164 +3415,359 @@ function routeBlocks(routeKey: RouteKey) {
 
     case "audit":
       {
-        const severityCounts = auditEvents.reduce<Record<string, number>>((counts, event) => {
-          counts[event.severity] = (counts[event.severity] ?? 0) + 1;
-          return counts;
-        }, {});
+        const founderAuditEvents = auditEvents.filter((event) => event.id !== 16);
+        const summary = getAuditSummary(founderAuditEvents);
+        const auditRows = getAuditTimelineRows(founderAuditEvents);
+        const quickFilters = getAuditEntityQuickFilters();
 
         return (
-          <>
-            <InternalViewLabel />
+          <div className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <InternalViewLabel />
+                  <StatusBadge label="Full Traceability" />
+                </div>
+                <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Audit Trail</h1>
+                <p className="max-w-4xl text-sm leading-6 text-slate-500">
+                  Complete operational history across quotes, jobs, materials, quality, customer reports, and system events.
+                </p>
+              </div>
+            </div>
+
             <MetricRow
               items={[
-                { label: "Events", value: `${auditEvents.length}`, detail: "Founder trail seeded", tone: "blue" },
-                { label: "Approvals", value: `${severityCounts.Approval ?? 0}`, detail: "Decision points captured", tone: "amber" },
-                { label: "Critical", value: `${severityCounts.Critical ?? 0}`, detail: "Escalations and blockers", tone: "rose" },
-                { label: "Traceability", value: "Full", detail: "Jobs, quotes, quality, and purchasing", tone: "emerald" }
+                { label: "Audit events today", value: `${summary.auditEventsToday}`, detail: "Traceability already captured", tone: "blue" },
+                { label: "Events requiring review", value: `${summary.eventsRequiringReview}`, detail: "Approvals and escalations", tone: "amber" },
+                { label: "User actions logged", value: `${summary.userActionsLogged}`, detail: "Human activity recorded", tone: "emerald" },
+                { label: "System automations logged", value: `${summary.systemAutomationsLogged}`, detail: "Workflow and orchestration", tone: "slate" },
+                { label: "Exports generated", value: `${summary.exportsGenerated}`, detail: "Traveler and report outputs", tone: "blue" },
+                { label: "Compliance-ready records", value: `${summary.complianceReadyRecords}`, detail: "A complete founder trail", tone: "rose" }
               ]}
             />
-            <AuditPanel
-              title="Full traceability"
-              subtitle="Everything in Phase 1 points to this seeded audit rail."
-              items={auditEvents.slice(0, 8).map((event) => {
-                const entityHref =
-                  event.entityType === "quote"
-                    ? "/quotes/q-1003"
-                    : event.entityType === "job"
-                      ? event.entityId === "J-2104"
-                        ? "/quotes/q-1003"
-                        : "/jobs/j-2035"
-                      : event.entityType === "workOrder"
-                        ? event.entityId === "WO-2035"
-                          ? "/output/work-order-traveler/j-2035"
-                          : "/quotes/q-1003"
-                        : event.entityType === "material"
-                          ? "/jobs/j-2099/material-impact"
-                          : event.entityType === "purchaseRequest"
-                            ? "/purchase-requests/pr-3091"
-                            : event.entityType === "report"
-                              ? "/reports/customer-status/j-2035"
-                              : event.entityType === "quality"
-                                ? "/quality/j-2042/scrap-approval"
-                                : "/capacity";
 
-                return {
-                  actor: event.actor,
-                  event: event.title,
-                  time: event.timestamp,
-                  detail: event.detail,
-                  severity: event.severity,
-                  entityHref,
-                  entityLabel: event.entityId
-                };
-              })}
-            />
-          </>
+            <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+              <TimelineShell title="Filters" subtitle="Static controls for the audit log.">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {[
+                    "Date range",
+                    "Actor",
+                    "Role",
+                    "Entity type",
+                    "Entity ID",
+                    "Action type",
+                    "Severity",
+                    "Workflow",
+                    "Search audit log"
+                  ].map((label) => (
+                    <label key={label} className="space-y-1.5">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</span>
+                      <input
+                        type="text"
+                        readOnly
+                        value={label === "Search audit log" ? "Search audit log" : "All"}
+                        className="w-full rounded-sm border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-4">
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Entity quick filters
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {quickFilters.map((filter) => (
+                      <button
+                        key={filter.label}
+                        type="button"
+                        className="rounded-sm border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </TimelineShell>
+
+              <DataTableShell title="Founder audit timeline" subtitle="All 15 founder demo events, in chronological trace order.">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                      <tr>
+                        <th className="px-4 py-2.5 font-semibold">Timestamp</th>
+                        <th className="px-4 py-2.5 font-semibold">Actor</th>
+                        <th className="px-4 py-2.5 font-semibold">Role</th>
+                        <th className="px-4 py-2.5 font-semibold">Action</th>
+                        <th className="px-4 py-2.5 font-semibold">Entity type</th>
+                        <th className="px-4 py-2.5 font-semibold">Entity ID</th>
+                        <th className="px-4 py-2.5 font-semibold">Result</th>
+                        <th className="px-4 py-2.5 font-semibold">Notes</th>
+                        <th className="px-4 py-2.5 font-semibold">Severity</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {auditRows.map((row) => (
+                        <tr key={`${row.timestamp}-${row.action}`} className="align-top">
+                          <td className="px-4 py-3 text-slate-700">{row.timestamp}</td>
+                          <td className="px-4 py-3 font-medium text-slate-950">{row.actor}</td>
+                          <td className="px-4 py-3 text-slate-700">{row.actorRole}</td>
+                          <td className="px-4 py-3 text-slate-700">{row.action}</td>
+                          <td className="px-4 py-3 text-slate-700">{row.entityType}</td>
+                          <td className="px-4 py-3">
+                            <EntityLink href={row.href}>{row.entityId}</EntityLink>
+                          </td>
+                          <td className="px-4 py-3 text-slate-700">{row.result}</td>
+                          <td className="px-4 py-3 text-slate-600">{row.notes}</td>
+                          <td className="px-4 py-3">
+                            <SeverityBadge severity={row.severity} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </DataTableShell>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 shadow-none">
+              <div className="text-sm text-slate-600">
+                The trail spans quotes, jobs, quality, purchasing, customer communication, and system automation.
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                >
+                  Export Audit CSV
+                </button>
+                <Link
+                  href="/audit/jobs/j-2035"
+                  className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                >
+                  View entity timeline
+                </Link>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Link
+                href="/audit/jobs/j-2035"
+                className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                View J-2035 entity timeline
+              </Link>
+            </div>
+          </div>
         );
       }
 
     case "audit-job":
-      return (
-        <AuditPanel
-          title="Job audit trail"
-          subtitle="Job-level change history for seeded traceability."
-          items={[
-            {
-              actor: "Owner / GM",
-              event: "Approved quote",
-              time: "8:42 AM",
-              detail: "Q-1003 approved and linked to the production job.",
-              severity: "Approval",
-              entityHref: "/quotes/q-1003",
-              entityLabel: "Q-1003"
-            },
-            {
-              actor: "Scheduler",
-              event: "Changed release date",
-              time: "9:20 AM",
-              detail: "Schedule shifted to preserve the press brake constraint.",
-              severity: "Automation",
-              entityHref: "/capacity",
-              entityLabel: "Capacity"
-            }
-          ]}
-        />
-      );
-
-    case "demo-summary":
       {
-        const summary = getCapacitySummary(workCenters);
+        const entityTimeline = getJ2035EntityTimeline();
+        const auditRecords = auditEvents.filter((event) =>
+          [
+            "job-moved-production",
+            "traveler-printed",
+            "customer-report-generated",
+            "customer-report-saved"
+          ].includes(event.eventType)
+        );
 
         return (
           <div className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <EntityLink href="/jobs/j-2035">J-2035</EntityLink>
+                  <StatusBadge label="In Production" />
+                  <StatusBadge label="On Track" />
+                </div>
+                <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Entity Timeline — J-2035</h1>
+                <p className="max-w-4xl text-sm leading-6 text-slate-500">
+                  Job-level lineage showing the linked quote, production release, traveler, customer-safe report, and final audit proof.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+              <TimelineShell title="Linked entities" subtitle="Everything points back to the same production record.">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Work order</div>
+                    <EntityLink href="/output/work-order-traveler/j-2035" className="mt-2 inline-flex">
+                      WO-2035
+                    </EntityLink>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">MetroFab Industries</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer PO</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">PO-8841</div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Traveler</div>
+                    <EntityLink href="/output/work-order-traveler/j-2035" className="mt-2 inline-flex">
+                      Work Order Traveler
+                    </EntityLink>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer report</div>
+                    <EntityLink href="/reports/customer-status/j-2035" className="mt-2 inline-flex">
+                      Customer Job Status Report
+                    </EntityLink>
+                  </div>
+                </div>
+              </TimelineShell>
+
+              <TimelineShell title="Timeline events" subtitle="Lineage from approval through customer communication.">
+                <div className="space-y-3">
+                  {entityTimeline.map((item) => (
+                    <div key={`${item.timestamp}-${item.title}`} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-950">{item.title}</div>
+                        <SeverityBadge severity={item.severity} />
+                      </div>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">{item.detail}</p>
+                      <div className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
+                        {item.timestamp}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </TimelineShell>
+            </div>
+
+            <AuditPanel
+              title="Audit records"
+              subtitle="Filtered job events for the J-2035 lineage."
+              items={auditRecords.map((event) => ({
+                actor: event.actor,
+                actorRole: event.actorRole,
+                event: event.title,
+                time: event.timestamp,
+                detail: event.detail,
+                severity: event.severity,
+                entityHref:
+                  event.entityType === "workOrder"
+                    ? "/output/work-order-traveler/j-2035"
+                    : event.entityType === "report"
+                      ? "/reports/customer-status/j-2035"
+                      : "/jobs/j-2035",
+                entityLabel: event.entityId,
+                result: event.detail,
+                notes: event.detail,
+                entityType: event.entityType
+              }))}
+            />
+
+            <div className="flex justify-end">
+              <Link
+                href="/demo/summary"
+                className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                View final demo summary
+              </Link>
+            </div>
+          </div>
+        );
+      }
+
+    case "demo-summary":
+      {
+        const pillars = getFinalValuePillars();
+        const demoRecap = getDemoPathRecap();
+
+        return (
+          <div className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="space-y-2">
+                <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">
+                  JobShop OS: One Operating System for Custom Manufacturing
+                </h1>
+                <p className="max-w-4xl text-sm leading-6 text-slate-500">
+                  Quote governance, capacity visibility, production control, materials readiness, quality accountability,
+                  customer communication, and auditability - all connected.
+                </p>
+              </div>
+            </div>
+
             <MetricRow
               items={[
-                {
-                  label: "Shell status",
-                  value: "Phase 2 seed",
-                  detail: "Centralized data layer wired",
-                  tone: "blue"
-                },
-                {
-                  label: "Customers",
-                  value: `${customers.length}`,
-                  detail: "Seeded customer accounts",
-                  tone: "emerald"
-                },
-                {
-                  label: "Steps",
-                  value: "13",
-                  detail: "Founder demo path preserved",
-                  tone: "amber"
-                },
-                {
-                  label: "Bottleneck",
-                  value: summary.bottleneckLabel,
-                  detail: `${summary.utilization}% load`,
-                  tone: "slate"
-                }
+                { label: "Founder demo steps", value: "13", detail: "End-to-end trace path", tone: "blue" },
+                { label: "Highlighted risks", value: "5", detail: "Capacity, quality, material, quote, production", tone: "amber" },
+                { label: "Customer-safe reports", value: "1", detail: "MetroFab communication package", tone: "emerald" },
+                { label: "Audit trail", value: "Full", detail: "Traceability across every phase", tone: "rose" }
               ]}
             />
 
             <div className="grid gap-4 xl:grid-cols-2">
-              <DataTableShell title="Status badges" subtitle="Centralized style map for all major states.">
+              <DataTableShell title="Seven value pillars" subtitle="The operating model the founder demo communicates.">
                 <div className="grid gap-3 p-4 md:grid-cols-2">
-                  {Object.entries(allStatusGroups).map(([group, statuses]) => (
-                    <div key={group} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                        {group}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {statuses.map((status) => (
-                          <StatusBadge key={status} label={status} />
-                        ))}
-                      </div>
+                  {pillars.map((pillar) => (
+                    <div key={pillar.title} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{pillar.title}</div>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">{pillar.description}</p>
                     </div>
                   ))}
                 </div>
               </DataTableShell>
 
-              <TimelineShell title="Shared component showcase" subtitle="Everything that Phase 1 exposes as reusable UI.">
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <EntityLink href="/jobs/j-2035">J-2035</EntityLink>
-                    <EntityLink href="/quotes/q-1003">Q-1003</EntityLink>
-                    <EntityLink href="/purchase-requests/pr-3091">PR-3091</EntityLink>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <SeverityBadge severity="Info" />
-                    <SeverityBadge severity="Warning" />
-                    <SeverityBadge severity="Critical" />
-                    <SeverityBadge severity="Blocked" />
-                    <SeverityBadge severity="Approval" />
-                    <SeverityBadge severity="Automation" />
-                    <SeverityBadge severity="Success" />
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                    Centralized demo records now drive the preview routes and future phase workflows.
-                  </div>
+              <TimelineShell title="Demo path recap" subtitle="From the dashboard to full traceability.">
+                <div className="flex flex-wrap gap-2">
+                  {demoRecap.map((step, index) => (
+                    <div
+                      key={step}
+                      className={cn(
+                        "rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em]",
+                        index === 0 ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-slate-50 text-slate-600"
+                      )}
+                    >
+                      {step}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+                  JobShop OS helps custom manufacturers catch risks early, keep jobs moving, and run quoting, production,
+                  quality, materials, purchasing, customer updates, and audit history from one operating system.
                 </div>
               </TimelineShell>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1fr_auto]">
+              <TimelineShell title="Final value statement" subtitle="What the founder demo closes with.">
+                <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+                  JobShop OS helps custom manufacturers catch risks early, keep jobs moving, and run quoting, production,
+                  quality, materials, purchasing, customer updates, and audit history from one operating system.
+                </div>
+              </TimelineShell>
+              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                <Link
+                  href="/"
+                  className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                >
+                  Restart founder demo
+                </Link>
+                <Link
+                  href="/"
+                  className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                >
+                  Open Production Dashboard
+                </Link>
+                <Link
+                  href="/audit"
+                  className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                >
+                  View full audit trail
+                </Link>
+                <Link
+                  href="/audit/jobs/j-2035"
+                  className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                >
+                  View J-2035 timeline
+                </Link>
+              </div>
             </div>
           </div>
         );

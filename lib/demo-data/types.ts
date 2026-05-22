@@ -474,6 +474,44 @@ export type CustomerSafeTimelineItem = {
   severity: "Info" | "Warning" | "Critical" | "Blocked" | "Approval" | "Automation" | "Success";
 };
 
+export type AuditSummary = {
+  auditEventsToday: number;
+  eventsRequiringReview: number;
+  userActionsLogged: number;
+  systemAutomationsLogged: number;
+  exportsGenerated: number;
+  complianceReadyRecords: number;
+};
+
+export type AuditQuickFilter = {
+  label: string;
+};
+
+export type AuditTimelineRow = {
+  timestamp: string;
+  actor: string;
+  actorRole: string;
+  action: string;
+  entityType: AuditEvent["entityType"];
+  entityId: string;
+  result: string;
+  notes: string;
+  severity: AuditEvent["severity"];
+  href: string;
+};
+
+export type EntityTimelineEntry = {
+  title: string;
+  detail: string;
+  timestamp: string;
+  severity: AuditEvent["severity"] | CustomerSafeTimelineItem["severity"];
+};
+
+export type FinalValuePillar = {
+  title: string;
+  description: string;
+};
+
 export type AuditEvent = {
   id: number;
   eventType: string;

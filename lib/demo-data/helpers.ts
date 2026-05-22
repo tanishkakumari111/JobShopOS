@@ -1,5 +1,8 @@
 import type {
   AuditEvent,
+  AuditQuickFilter,
+  AuditSummary,
+  AuditTimelineRow,
   CapacitySummary,
   DefectReasonBreakdownRow,
   Customer,
@@ -16,6 +19,7 @@ import type {
   MaterialDashboardRow,
   MaterialReservationBreakdownRow,
   MaterialTimelineEntry,
+  EntityTimelineEntry,
   PurchaseRequest,
   PurchaseRequestAuditEntry,
   PurchaseRequestState,
@@ -25,7 +29,9 @@ import type {
   QuoteSummary,
   ProductionQueueRow,
   QualitySummary,
+  FinalValuePillar,
   ReworkOrder,
+  Report,
   WorkCenterCapacityRow,
   WorkCenter
 } from "./types";
@@ -678,4 +684,197 @@ export function getCustomerStatusReports(
   timeline: CustomerSafeTimelineItem[]
 ) {
   return { report, timeline };
+}
+
+export function getAuditSummary(events: AuditEvent[] = auditEvents): AuditSummary {
+  const reviewSeverities: AuditEvent["severity"][] = ["Approval", "Critical", "Blocked", "Warning"];
+  const exportEventTypes = new Set(["traveler-printed", "customer-report-generated", "customer-report-saved"]);
+
+  return {
+    auditEventsToday: events.length,
+    eventsRequiringReview: events.filter((event) => reviewSeverities.includes(event.severity)).length,
+    userActionsLogged: events.filter((event) => event.actorRole !== "Automation").length,
+    systemAutomationsLogged: events.filter((event) => event.actorRole === "Automation").length,
+    exportsGenerated: events.filter((event) => exportEventTypes.has(event.eventType)).length,
+    complianceReadyRecords: events.length
+  };
+}
+
+export function getAuditEntityQuickFilters(): AuditQuickFilter[] {
+  return [
+    "Q-1003",
+    "J-2035",
+    "J-2042",
+    "J-2099",
+    "J-2104",
+    "WO-2104",
+    "RW-2042-01",
+    "PR-3091",
+    "AL-6061-PLT-0.375"
+  ].map((label) => ({ label }));
+}
+
+export function getAuditTimelineRows(events: AuditEvent[] = auditEvents): AuditTimelineRow[] {
+  const founderEventTypes = new Set([
+    "quote-submitted",
+    "approval-triggered",
+    "owner-approved",
+    "quote-converted",
+    "work-order-created",
+    "job-moved-production",
+    "traveler-printed",
+    "capacity-bottleneck-detected",
+    "scrap-logged",
+    "scrap-approved",
+    "rework-created",
+    "material-shortage-detected",
+    "purchase-request-created",
+    "customer-report-generated",
+    "customer-report-saved"
+  ]);
+
+  const hrefByEntity: Record<string, string> = {
+    "Q-1003": "/quotes/q-1003",
+    "J-2035": "/jobs/j-2035",
+    "J-2042": "/quality/j-2042/scrap-approval",
+    "J-2099": "/jobs/j-2099/material-impact",
+    "J-2104": "/quotes/q-1003/convert",
+    "WO-2035": "/output/work-order-traveler/j-2035",
+    "WO-2104": "/quotes/q-1003/convert",
+    "RW-2042-01": "/quality/j-2042/rework-created",
+    "PR-3091": "/purchase-requests/pr-3091",
+    "AL-6061-PLT-0.375": "/materials/al-6061-plt-0.375",
+    "RPT-J-2035-CUSTOMER": "/reports/customer-status/j-2035"
+  };
+
+  return events
+    .filter((event) => founderEventTypes.has(event.eventType))
+    .map((event) => ({
+      timestamp: event.timestamp,
+      actor: event.actor,
+      actorRole: event.actorRole,
+      action: event.title,
+      entityType: event.entityType,
+      entityId: event.entityId,
+      result: event.detail,
+      notes: event.detail,
+      severity: event.severity,
+      href: hrefByEntity[event.entityId] ?? "/audit"
+    }));
+}
+
+export function getJ2035EntityTimeline(): EntityTimelineEntry[] {
+  return [
+    {
+      title: "Quote approved",
+      detail: "Q-1003 received leadership approval and became active production work.",
+      timestamp: "Today 10:45 AM",
+      severity: "Success"
+    },
+    {
+      title: "Work order released",
+      detail: "WO-2035 entered the production queue for MetroFab Industries.",
+      timestamp: "Today 11:02 AM",
+      severity: "Automation"
+    },
+    {
+      title: "Material reserved",
+      detail: "AL-6061-PLT-0.375 is reserved against the job record.",
+      timestamp: "Today 11:08 AM",
+      severity: "Info"
+    },
+    {
+      title: "Job moved to production",
+      detail: "J-2035 released to the shop floor queue.",
+      timestamp: "Today 11:02 AM",
+      severity: "Success"
+    },
+    {
+      title: "Cut step completed",
+      detail: "Laser cutting finished the initial blanks.",
+      timestamp: "Today 08:42 AM",
+      severity: "Success"
+    },
+    {
+      title: "Bend step started",
+      detail: "Press Brake is actively bending the bracket set.",
+      timestamp: "Today 10:42 AM",
+      severity: "Warning"
+    },
+    {
+      title: "Traveler printed",
+      detail: "Work order traveler generated for floor use.",
+      timestamp: "Today 11:04 AM",
+      severity: "Info"
+    },
+    {
+      title: "Customer-safe status generated",
+      detail: "MetroFab received an on-track status summary.",
+      timestamp: "Today 3:01 PM",
+      severity: "Info"
+    },
+    {
+      title: "Customer report saved",
+      detail: "Printable customer-safe version archived to the account record.",
+      timestamp: "Today 3:01 PM",
+      severity: "Success"
+    }
+  ];
+}
+
+export function getFinalValuePillars(): FinalValuePillar[] {
+  return [
+    {
+      title: "Quote Governance",
+      description:
+        "High-value quotes like Q-1003 require Owner / GM approval before production commitment. Prevents unauthorized revenue and margin risk."
+    },
+    {
+      title: "Capacity Visibility",
+      description:
+        "Bottlenecks like Press Brake at 130% utilization are visible before jobs slip. Helps schedulers protect delivery dates."
+    },
+    {
+      title: "Production Control",
+      description:
+        "Jobs like J-2035 connect routing, materials, operators, work centers, quality, and travelers. Turns planning into shop-floor execution."
+    },
+    {
+      title: "Materials Readiness",
+      description:
+        "Shortages like AL-6061-PLT-0.375 for J-2099 are tied directly to blocked jobs. Purchasing actions are linked to production readiness."
+    },
+    {
+      title: "Quality Accountability",
+      description:
+        "Scrap above tolerance on J-2042 creates controlled review and rework. Prevents quality failures from being hidden in notes or spreadsheets."
+    },
+    {
+      title: "Customer-Safe Communication",
+      description:
+        "Customer Service can generate safe, accurate reports for J-2035 without exposing margin, blame, or internal notes. Improves professionalism and trust."
+    },
+    {
+      title: "Auditability",
+      description:
+        "Every critical action is logged with actor, role, timestamp, entity, result, and notes. Creates accountability across the whole operation."
+    }
+  ];
+}
+
+export function getDemoPathRecap() {
+  return [
+    "Dashboard",
+    "Capacity",
+    "Job",
+    "Traveler",
+    "Quality",
+    "Rework",
+    "Materials",
+    "Purchase Request",
+    "Quote Approval",
+    "Job Conversion",
+    "Customer Report",
+    "Audit"
+  ];
 }
