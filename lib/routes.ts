@@ -50,11 +50,13 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
   },
   capacity: {
     path: "/capacity",
-    title: "Capacity",
-    summary: "Visualize bottlenecks, near-capacity queues, and work-center load.",
-    action: "Review bottlenecks",
+    title: "Capacity Planner",
+    summary: "Work-center load, bottlenecks, and affected jobs across the shop floor.",
+    action: "Review schedule",
     audience: "internal",
-    demoStep: 2
+    demoStep: 2,
+    presenterNote:
+      "Now we move from dashboard risk to the bottleneck. JobShop OS shows which work center is overloaded before jobs slip."
   },
   jobs: {
     path: "/jobs",
@@ -65,19 +67,23 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
   },
   "job-2035": {
     path: "/jobs/j-2035",
-    title: "Job J-2035",
-    summary: "Primary production record with routing, status, and linked materials.",
-    action: "Print traveler",
+    title: "Job Detail — J-2035",
+    summary: "Primary production record with routing, status, capacity impact, and linked materials.",
+    action: "Print Traveler",
     audience: "internal",
-    demoStep: 3
+    demoStep: 3,
+    presenterNote:
+      "Now we move from the bottleneck to the affected job. JobShop OS connects capacity risk directly to production execution."
   },
   "work-order-traveler": {
     path: "/output/work-order-traveler/j-2035",
-    title: "Work Order Traveler",
-    summary: "Printable traveler view with work instructions and signoff checkpoints.",
-    action: "Download traveler",
+    title: "Work Order Traveler — J-2035",
+    summary: "Printable traveler view with routing, materials, sign-off checkpoints, and traceability.",
+    action: "Print Traveler",
     audience: "internal",
-    demoStep: 4
+    demoStep: 4,
+    presenterNote:
+      "This is the artifact that connects digital planning to physical production. Operators can carry this traveler with the job while the system maintains the audit trail."
   },
   quality: {
     path: "/quality",

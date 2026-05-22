@@ -22,6 +22,46 @@ export type WorkCenter = {
     | "Maintenance";
 };
 
+export type JobRoutingStep = {
+  stepNumber: number;
+  operation: string;
+  workCenter: string;
+  plannedHours: number;
+  actualHours?: number;
+  assignedOperator: string;
+  machine: string;
+  status: "Complete" | "In Progress" | "Pending";
+  timestamp?: string;
+};
+
+export type TravelerMaterialRow = {
+  sku: string;
+  name: string;
+  requiredQuantity: string;
+  reservedQuantity: string;
+  lotNumber: string;
+  signOff: string;
+};
+
+export type TravelerRoutingRow = {
+  step: string;
+  operation: string;
+  workCenter: string;
+  machine: string;
+  plannedHours: string;
+  operator: string;
+  start: string;
+  end: string;
+  status: string;
+  signOff: string;
+};
+
+export type ProductionUpdate = {
+  label: string;
+  detail: string;
+  status: "Complete" | "Pending" | "Watch" | "Info";
+};
+
 export type Job = {
   id: string;
   slug: string;
@@ -209,4 +249,7 @@ export type WorkCenterCapacityRow = {
   queuedHoursPerWeek: number;
   utilization: number;
   status: WorkCenter["status"];
+  affectedJobs: string[];
+  nextAction: string;
+  ctaHref?: string;
 };

@@ -1,5 +1,16 @@
 export { customers } from "./customers";
-export { jobs } from "./jobs";
+export {
+  jobs,
+  j2035ProductionUpdates,
+  j2035QualityReadiness,
+  j2035QualityInspectionChecks,
+  j2035ScrapAndReworkFields,
+  j2035RoutingSteps,
+  j2035TravelerMaterials,
+  j2035TravelerRoutingRows,
+  j2035TravelerSignOffFields,
+  j2035TravelerShipping
+} from "./jobs";
 export { materials } from "./materials";
 export { purchaseRequests } from "./purchasing";
 export { qualityRecords, reworkOrders } from "./quality";
@@ -21,11 +32,13 @@ export {
   getCustomerSafeJobStatus,
   getDashboardRiskItems,
   getJobById,
+  getJobTraceEvents,
   getMaterialBySku,
   getPurchaseRequestById,
   getQuoteById,
   getProductionQueue,
   getRecentAuditEvents,
+  getCapacityRiskJobIds,
   getWorkCenterCapacityRows,
   getReworkOrderById
 } from "./helpers";
@@ -41,8 +54,12 @@ export type {
   PurchaseRequest,
   Quote,
   ProductionQueueRow,
+  ProductionUpdate,
   Report,
   ReworkOrder,
+  JobRoutingStep,
+  TravelerMaterialRow,
+  TravelerRoutingRow,
   WorkCenterCapacityRow,
   WorkCenter
 } from "./types";

@@ -6,7 +6,7 @@ export function PrintHeader({
   subtitle?: string;
 }) {
   return (
-    <header className="rounded-md border border-slate-200 bg-white p-4">
+    <section className="rounded-md border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -24,6 +24,6 @@ export function PrintHeader({
           </div>
         </div>
       </div>
-    </header>
+    </section>
   );
 }

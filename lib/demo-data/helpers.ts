@@ -211,14 +211,47 @@ export function getCapacitySummary(workCenters: WorkCenter[]): CapacitySummary {
   };
 }
 
-export function getWorkCenterCapacityRows(workCenters: WorkCenter[]): WorkCenterCapacityRow[] {
-  return workCenters.map((workCenter) => ({
-    name: workCenter.name,
-    capacityHoursPerWeek: workCenter.capacityHoursPerWeek,
-    queuedHoursPerWeek: workCenter.queuedHoursPerWeek,
-    utilization: workCenter.utilization,
-    status: workCenter.status
-  }));
+export function getWorkCenterCapacityRows(
+  workCenters: WorkCenter[],
+  jobs: Job[] = []
+): WorkCenterCapacityRow[] {
+  return workCenters.map((workCenter) => {
+    const affectedJobs = jobs
+      .filter((job) => job.workCenter === workCenter.name)
+      .map((job) => job.id);
+
+    return {
+      name: workCenter.name,
+      capacityHoursPerWeek: workCenter.capacityHoursPerWeek,
+      queuedHoursPerWeek: workCenter.queuedHoursPerWeek,
+      utilization: workCenter.utilization,
+      status: workCenter.status,
+      affectedJobs,
+      nextAction:
+        workCenter.status === "Bottleneck"
+          ? "View affected job"
+          : workCenter.status === "Over Capacity"
+            ? "Rebalance load"
+            : "Monitor queue",
+      ctaHref:
+        workCenter.name === "Press Brake"
+          ? "/jobs/j-2035"
+          : workCenter.name === "Welding"
+            ? "/quality/j-2042/scrap-approval"
+            : workCenter.name === "CNC Mill"
+              ? "/jobs/j-2099/material-impact"
+              : undefined
+    };
+  });
+}
+
+export function getCapacityRiskJobIds(jobs: Job[], workCenters: WorkCenter[]) {
+  const capacityRows = getWorkCenterCapacityRows(workCenters);
+  const riskyCenterNames = capacityRows
+    .filter((row) => row.status === "Bottleneck" || row.status === "Over Capacity")
+    .flatMap((row) => row.affectedJobs);
+
+  return jobs.filter((job) => riskyCenterNames.includes(job.id)).map((job) => job.id);
 }
 
 export function getProductionQueue(jobs: Job[]): ProductionQueueRow[] {
@@ -272,6 +305,21 @@ export function getRecentAuditEvents(limit: number, events: AuditEvent[] = audit
   const remaining = events.filter((event) => !priorityEventTypes.includes(event.eventType));
 
   return [...prioritized, ...remaining].slice(0, limit);
+}
+
+export function getJobTraceEvents(jobId: string, events: AuditEvent[] = auditEvents) {
+  const workOrderId = jobId === "J-2035" ? "WO-2035" : undefined;
+  const reportId = jobId === "J-2035" ? "RPT-J-2035-CUSTOMER" : undefined;
+
+  return [
+    events.find((event) => event.eventType === "job-moved-production" && event.entityId === jobId),
+    workOrderId
+      ? events.find((event) => event.eventType === "traveler-printed" && event.entityId === workOrderId)
+      : undefined,
+    reportId
+      ? events.find((event) => event.eventType === "customer-report-generated" && event.entityId === reportId)
+      : undefined
+  ].filter((event): event is AuditEvent => Boolean(event));
 }
 
 export function getCustomerSafeJobStatus(jobId: string, jobs: Job[]): CustomerSafeJobStatus | undefined {

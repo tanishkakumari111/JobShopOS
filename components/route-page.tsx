@@ -14,6 +14,7 @@ import { InternalViewLabel } from "@/components/internal-view-label";
 import { CustomerSafeViewLabel } from "@/components/customer-safe-view-label";
 import { PrintHeader } from "@/components/print-header";
 import { PrintFooter } from "@/components/print-footer";
+import { PrintButton } from "@/components/print-button";
 import { allStatusGroups } from "@/lib/status";
 import { routeMeta, type RouteKey } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -26,13 +27,24 @@ import {
   getCustomerSafeJobStatus,
   getDashboardRiskItems,
   getDashboardMetrics,
+  getCapacityRiskJobIds,
   getJobById,
+  getJobTraceEvents,
   getMaterialBySku,
   getPurchaseRequestById,
   getQuoteById,
   getProductionQueue,
   getRecentAuditEvents,
   getReworkOrderById,
+  j2035ProductionUpdates,
+  j2035QualityInspectionChecks,
+  j2035QualityReadiness,
+  j2035ScrapAndReworkFields,
+  j2035RoutingSteps,
+  j2035TravelerMaterials,
+  j2035TravelerRoutingRows,
+  j2035TravelerSignOffFields,
+  j2035TravelerShipping,
   jobs,
   materials,
   purchaseRequests,
@@ -165,7 +177,7 @@ function routeBlocks(routeKey: RouteKey) {
         const capacitySummary = getCapacitySummary(workCenters);
         const risks = getDashboardRiskItems(jobs, quotes, materials, workCenters);
         const productionQueue = getProductionQueue(jobs);
-        const capacityRows = getWorkCenterCapacityRows(workCenters);
+        const capacityRows = getWorkCenterCapacityRows(workCenters, jobs);
         const recentAudit = getRecentAuditEvents(5);
 
         return (
@@ -378,61 +390,162 @@ function routeBlocks(routeKey: RouteKey) {
     case "capacity":
       {
         const summary = getCapacitySummary(workCenters);
+        const capacityRows = getWorkCenterCapacityRows(workCenters, jobs);
+        const capacityRiskJobIds = getCapacityRiskJobIds(jobs, workCenters);
 
         return (
           <>
             <MetricRow
               items={[
                 {
-                  label: "Available hours",
-                  value: `${workCenters.reduce((sum, workCenter) => sum + workCenter.capacityHoursPerWeek, 0)}`,
-                  detail: "Across seeded work centers",
-                  tone: "emerald"
+                  label: "Total work centers",
+                  value: `${summary.totalWorkCenters}`,
+                  detail: "Seeded shop-floor operations",
+                  tone: "blue"
                 },
                 {
-                  label: "Near capacity",
-                  value: `${summary.nearCapacityWorkCenters} lines`,
-                  detail: "One is at the press brake",
-                  tone: "amber"
-                },
-                {
-                  label: "Over capacity",
-                  value: `${summary.overCapacityWorkCenters} line`,
-                  detail: "Triggered by J-2099 material impact",
+                  label: "Work centers over capacity",
+                  value: `${summary.overCapacityWorkCenters}`,
+                  detail: "Only Press Brake is over capacity",
                   tone: "rose"
                 },
                 {
-                  label: "Bottlenecks",
-                  value: summary.bottleneckLabel,
-                  detail: `${summary.utilization}% utilization`,
+                  label: "Highest utilization",
+                  value: `${summary.utilization}%`,
+                  detail: summary.bottleneckLabel,
+                  tone: "amber"
+                },
+                {
+                  label: "Queued hours",
+                  value: `${summary.queuedHoursPerWeek}h`,
+                  detail: "Press Brake queue",
+                  tone: "rose"
+                },
+                {
+                  label: "Available hours",
+                  value: `${summary.capacityHoursPerWeek}h`,
+                  detail: "Weekly capacity per center",
+                  tone: "emerald"
+                },
+                {
+                  label: "Jobs at risk from capacity",
+                  value: `${capacityRiskJobIds.length}`,
+                  detail: capacityRiskJobIds.map((jobId) => jobId).join(", "),
                   tone: "blue"
                 }
               ]}
             />
-            <div className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
-              <DataTableShell title="Work center load" subtitle="Seeded capacity grid for the scheduler view.">
+            <div className="grid gap-4 xl:grid-cols-[1.3fr_0.9fr]">
+              <DataTableShell title="Capacity grid" subtitle="Work-center load across the seeded shop floor.">
                 <TinyTable
-                  columns={["Work center", "Load", "Status", "Next action"]}
-                  rows={workCenters.map((workCenter) => [
-                    workCenter.name,
-                    `${workCenter.utilization}%`,
-                    <StatusBadge label={workCenter.status} />,
-                    workCenter.status === "Bottleneck" ? (
-                      <EntityLink href="/jobs/j-2035">Resequence J-2035</EntityLink>
+                  columns={["Work center", "Capacity hours", "Queued hours", "Utilization %", "Status", "Affected jobs", "Next action"]}
+                  rows={capacityRows.map((row) => [
+                    row.name,
+                    `${row.capacityHoursPerWeek}h/week`,
+                    row.name === "Press Brake" ? (
+                      <span className="font-semibold text-rose-700">{row.queuedHoursPerWeek}h/week</span>
                     ) : (
-                      "Monitor queue"
+                      `${row.queuedHoursPerWeek}h/week`
+                    ),
+                    row.name === "Press Brake" ? (
+                      <span className="font-semibold text-rose-700">{row.utilization}%</span>
+                    ) : (
+                      `${row.utilization}%`
+                    ),
+                    row.name === "Press Brake" ? (
+                      <div className="flex flex-wrap gap-2">
+                        <StatusBadge label="Bottleneck" />
+                        <StatusBadge label="Over Capacity" />
+                      </div>
+                    ) : (
+                      <StatusBadge label={row.status} />
+                    ),
+                    row.affectedJobs.length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {row.affectedJobs.map((jobId) => (
+                          <EntityLink key={jobId} href={`/jobs/${jobId.toLowerCase()}`}>
+                            {jobId}
+                          </EntityLink>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-slate-500">None</span>
+                    ),
+                    row.ctaHref ? (
+                      <EntityLink href={row.ctaHref}>{row.nextAction}</EntityLink>
+                    ) : (
+                      row.nextAction
                     )
                   ])}
                 />
               </DataTableShell>
+              <div className="space-y-4">
+                <RiskAlert
+                  severity="Critical"
+                  title="Press Brake Bottleneck"
+                  description={`52h queued against ${summary.capacityHoursPerWeek}h weekly capacity at ${summary.utilization}% utilization.`}
+                  href="/jobs/j-2035"
+                  actionLabel="View Job J-2035"
+                />
 
-              <RiskAlert
-                severity="Critical"
-                title={`Press Brake is operating at ${summary.utilization}% capacity`}
-                description={`Queued ${summary.queuedHoursPerWeek}h against ${summary.capacityHoursPerWeek}h capacity. The demo shows how the bottleneck becomes visible before a job is released.`}
-                href="/jobs/j-2035"
-                actionLabel="Inspect impacted job"
-              />
+                <section className="rounded-md border border-slate-200 bg-white shadow-none">
+                  <div className="border-b border-slate-200 px-4 py-3">
+                    <h3 className="text-sm font-semibold text-slate-950">Bottleneck detail</h3>
+                    <p className="mt-1 text-sm text-slate-500">How the overload is affecting the current release window.</p>
+                  </div>
+                  <div className="space-y-3 px-4 py-4 text-sm text-slate-700">
+                    <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <span>52h queued against 40h weekly capacity</span>
+                      <SeverityBadge severity="Critical" />
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <span>Current affected job</span>
+                      <EntityLink href="/jobs/j-2035">J-2035</EntityLink>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <span>Current operation</span>
+                      <StatusBadge label="Bend" />
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 leading-6 text-slate-600">
+                      Bend may delay downstream Weld and Finish steps. Review schedule or move non-critical work.
+                    </div>
+                    <div className="pt-1">
+                      <Link
+                        href="/jobs/j-2035"
+                        className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                      >
+                        View Job J-2035
+                      </Link>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-md border border-slate-200 bg-white shadow-none">
+                  <div className="border-b border-slate-200 px-4 py-3">
+                    <h3 className="text-sm font-semibold text-slate-950">Demo path</h3>
+                    <p className="mt-1 text-sm text-slate-500">Next: Production Job — J-2035</p>
+                  </div>
+                  <div className="px-4 py-4">
+                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                        Step 3 of 13
+                      </div>
+                      <div className="mt-2 text-sm font-semibold text-slate-950">Production Job — J-2035</div>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">
+                        The bottleneck resolves into the production record so the team can see the operational impact.
+                      </p>
+                    </div>
+                    <div className="mt-3">
+                      <Link
+                        href="/jobs/j-2035"
+                        className="inline-flex items-center gap-2 rounded-sm border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition hover:border-blue-300 hover:bg-blue-100"
+                      >
+                        Continue to J-2035
+                      </Link>
+                    </div>
+                  </div>
+                </section>
+              </div>
             </div>
           </>
         );
@@ -477,107 +590,486 @@ function routeBlocks(routeKey: RouteKey) {
     case "job-2035":
       {
         const job = getJobById("J-2035", jobs);
-        const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
         const customerSafe = getCustomerSafeJobStatus("J-2035", jobs);
-        const jobAudit = getAuditEventsByEntity("job", "J-2035", auditEvents);
+        const jobTrace = getJobTraceEvents("J-2035", auditEvents);
+        const pressBrake = workCenters.find((workCenter) => workCenter.name === "Press Brake");
 
         return (
           <>
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <EntityLink href="/jobs/j-2035">J-2035</EntityLink>
+                    <StatusBadge label={job?.status ?? "In Production"} />
+                    <SeverityBadge severity="Warning" />
+                    <InternalViewLabel />
+                  </div>
+                  <div className="grid gap-x-4 gap-y-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
+                    <div>Customer: <span className="font-medium text-slate-950">{job?.customerName ?? "MetroFab Industries"}</span></div>
+                    <div>Customer PO: <span className="font-medium text-slate-950">{job?.customerPo ?? "PO-8841"}</span></div>
+                    <div>Part: <span className="font-medium text-slate-950">{job?.part ?? "Bracket Set Rev A"}</span></div>
+                    <div>Quantity: <span className="font-medium text-slate-950">{job?.quantity ?? 500}</span></div>
+                    <div>Due date: <span className="font-medium text-slate-950">{job?.dueDate ?? "Friday"}</span></div>
+                    <div>Current step: <span className="font-medium text-slate-950">{job?.currentStep ?? "Bend"}</span></div>
+                    <div>Work center: <span className="font-medium text-slate-950">{job?.workCenter ?? "Press Brake"}</span></div>
+                    <div>Work order: <span className="font-medium text-slate-950">{job?.workOrder ?? "WO-2035"}</span></div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href="/output/work-order-traveler/j-2035"
+                    className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                  >
+                    Print Traveler
+                  </Link>
+                  <Link
+                    href="/customer-service/jobs/j-2035"
+                    className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                  >
+                    View Customer-Safe Status
+                  </Link>
+                  <Link
+                    href="/audit/jobs/j-2035"
+                    className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                  >
+                    View Audit Trail
+                  </Link>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                  >
+                    Log Production Update
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+              <div className="flex items-center gap-2">
+                <InternalViewLabel />
+              </div>
+              <p className="mt-2">
+                This view includes routing, material reservations, operator updates, quality status, and audit history.
+              </p>
+            </div>
+
             <MetricRow
               items={[
                 {
                   label: "Current status",
                   value: job?.status ?? "In Production",
-                  detail: `Customer PO ${job?.customerPo ?? "PO-8841"}`,
+                  detail: `Progress ${job?.progress ?? 62}%`,
                   tone: "blue"
                 },
                 {
-                  label: "Traveler",
+                  label: "Work order",
                   value: job?.workOrder ?? "WO-2035",
-                  detail: "Printable output seeded for Phase 2",
+                  detail: "Printable traveler linked",
                   tone: "slate"
                 },
                 {
-                  label: "Materials",
-                  value: "Reserved",
-                  detail: `${material?.sku ?? "AL-6061-PLT-0.375"} held`,
-                  tone: "emerald"
+                  label: "Current step",
+                  value: job?.currentStep ?? "Bend",
+                  detail: job?.workCenter ?? "Press Brake",
+                  tone: "amber"
                 },
                 {
-                  label: "Customer promise",
-                  value: customerSafe?.eta ?? "Friday",
-                  detail: customerSafe?.summary ?? "Report-ready status summary",
-                  tone: "emerald"
+                  label: "Risk",
+                  value: job?.risk ?? "Watch",
+                  detail: customerSafe?.summary ?? "Customer-safe status available",
+                  tone: "amber"
                 }
               ]}
             />
 
-            <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-              <TimelineShell title="Job timeline" subtitle="Operational history that later becomes a live event stream.">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <span>Customer PO {job?.customerPo ?? "PO-8841"}</span>
-                    <StatusBadge label="Approved" />
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <span>Current step: {job?.currentStep ?? "Bend"}</span>
-                    <StatusBadge label="Materials Reserved" />
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <span>Work center: {job?.workCenter ?? "Press Brake"}</span>
-                    <StatusBadge label={job?.status ?? "In Production"} />
-                  </div>
+            <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+              <DataTableShell title="Routing timeline" subtitle="Cut through finish, with the Bend operation currently in progress.">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                      <tr>
+                        <th className="px-4 py-2.5 font-semibold">Step</th>
+                        <th className="px-4 py-2.5 font-semibold">Operation</th>
+                        <th className="px-4 py-2.5 font-semibold">Work center</th>
+                        <th className="px-4 py-2.5 font-semibold">Planned hours</th>
+                        <th className="px-4 py-2.5 font-semibold">Actual hours</th>
+                        <th className="px-4 py-2.5 font-semibold">Operator</th>
+                        <th className="px-4 py-2.5 font-semibold">Machine</th>
+                        <th className="px-4 py-2.5 font-semibold">Status</th>
+                        <th className="px-4 py-2.5 font-semibold">Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {j2035RoutingSteps.map((step) => {
+                        const current = step.operation === "Bend";
+                        return (
+                          <tr key={step.stepNumber} className={cn(current && "bg-rose-50/50")}>
+                            <td className="px-4 py-3 font-mono font-semibold text-slate-900">{step.stepNumber}</td>
+                            <td className="px-4 py-3 font-medium text-slate-950">{step.operation}</td>
+                            <td className="px-4 py-3 text-slate-700">{step.workCenter}</td>
+                            <td className="px-4 py-3 text-slate-700">{step.plannedHours}h</td>
+                            <td className="px-4 py-3 text-slate-700">{step.actualHours ? `${step.actualHours}h` : "—"}</td>
+                            <td className="px-4 py-3 text-slate-700">{step.assignedOperator}</td>
+                            <td className="px-4 py-3 font-mono text-slate-700">{step.machine}</td>
+                            <td className="px-4 py-3">
+                              {current ? (
+                                <div className="flex flex-wrap gap-2">
+                                  <StatusBadge label="In Progress" />
+                                  <SeverityBadge severity="Warning" />
+                                </div>
+                              ) : (
+                                <StatusBadge label={step.status === "Complete" ? "Approved" : "Pending Inspection"} />
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-slate-500">{step.timestamp ?? "Pending"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              </TimelineShell>
+              </DataTableShell>
+
+              <div className="space-y-4">
+                <RiskAlert
+                  severity="Critical"
+                  title="Why this job is at risk"
+                  description={`Press Brake weekly capacity: ${pressBrake?.capacityHoursPerWeek ?? 40}h. Queued load: ${pressBrake?.queuedHoursPerWeek ?? 52}h. Current Bend step may delay downstream Weld and Finish steps.`}
+                  href="/capacity"
+                  actionLabel="Open Press Brake capacity view"
+                />
+
+                <section className="rounded-md border border-slate-200 bg-white shadow-none">
+                  <div className="border-b border-slate-200 px-4 py-3">
+                    <h3 className="text-sm font-semibold text-slate-950">Material reservation</h3>
+                    <p className="mt-1 text-sm text-slate-500">Material status is reserved with no current blocker for J-2035.</p>
+                  </div>
+                  <div className="space-y-3 px-4 py-4 text-sm text-slate-700">
+                    <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <span>Material status</span>
+                      <StatusBadge label="Reserved" />
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Message</div>
+                      <div className="mt-2 leading-6 text-slate-700">No current material blocker for J-2035.</div>
+                    </div>
+                    <div className="space-y-2">
+                      {j2035TravelerMaterials.map((row) => (
+                        <div key={row.sku} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <EntityLink href={`/materials/${row.sku.toLowerCase()}`}>{row.sku}</EntityLink>
+                              <div className="text-sm text-slate-600">{row.name}</div>
+                            </div>
+                            <StatusBadge label={row.signOff} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-md border border-slate-200 bg-white shadow-none">
+                  <div className="border-b border-slate-200 px-4 py-3">
+                    <h3 className="text-sm font-semibold text-slate-950">Quality readiness</h3>
+                    <p className="mt-1 text-sm text-slate-500">Inspection gates stay visible while production continues.</p>
+                  </div>
+                  <div className="space-y-3 px-4 py-4">
+                    {j2035QualityReadiness.map((item) => (
+                      <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
+                        <span className="text-slate-700">{item.label}</span>
+                        <span className="font-medium text-slate-950">{item.value}</span>
+                      </div>
+                    ))}
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm leading-6 text-slate-600">
+                      No active quality exception for J-2035. Inspection will be required after Finish.
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+              <DataTableShell title="Production updates" subtitle="Operator-facing updates for the live production record.">
+                <div className="space-y-3 p-4">
+                  {j2035ProductionUpdates.map((update) => (
+                    <div key={update.label} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-slate-950">{update.label}</div>
+                          <div className="mt-1 text-sm leading-6 text-slate-600">{update.detail}</div>
+                        </div>
+                        <SeverityBadge
+                          severity={update.status === "Complete" ? "Success" : update.status === "Pending" ? "Approval" : update.status === "Watch" ? "Warning" : "Info"}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </DataTableShell>
 
               <AuditPanel
-                title="Audit trace"
-                subtitle="Seeded changes for the traceability story."
-                items={(jobAudit.length ? jobAudit : getAuditEventsByEntity("job", "J-2035", auditEvents))
-                  .slice(0, 2)
-                  .map((event) => ({
-                    actor: event.actor,
-                    event: event.title,
-                    time: event.timestamp,
-                    detail: event.detail,
-                    severity: event.severity,
-                    entityHref: "/audit/jobs/j-2035",
-                    entityLabel: "Audit"
-                  }))}
+                title="Audit history preview"
+                subtitle="Recent events related to J-2035 and the surrounding traceability chain."
+                items={jobTrace.map((event) => ({
+                  actor: event.actor,
+                  event: event.title,
+                  time: event.timestamp,
+                  detail: event.detail,
+                  severity: event.severity,
+                  entityHref:
+                    event.entityType === "workOrder"
+                      ? "/output/work-order-traveler/j-2035"
+                      : event.entityType === "report"
+                        ? "/reports/customer-status/j-2035"
+                        : "/jobs/j-2035",
+                  entityLabel: event.entityId
+                }))}
               />
+            </div>
+
+            <div className="flex justify-end">
+              <Link
+                href="/output/work-order-traveler/j-2035"
+                className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                Open printable work order traveler
+              </Link>
             </div>
           </>
         );
       }
 
     case "work-order-traveler":
+      {
+        const job = getJobById("J-2035", jobs);
+
       return (
-        <>
+        <div className="space-y-4">
+          <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/jobs/j-2035"
+                className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+              >
+                Back to Job J-2035
+              </Link>
+              <PrintButton />
+            </div>
+          </div>
+
           <PrintHeader
-            title="Work Order Traveler WO-2035"
-            subtitle="Printable traveler placeholder for operators and supervisors."
+            title="Work Order Traveler - J-2035"
+            subtitle="Printable traveler connecting digital planning to physical production."
           />
-          <Checklist
-            items={[
-              { label: "Verify revision", state: "Approved" },
-              { label: "Confirm material lot", state: "Reserved" },
-              { label: "First article signoff", state: "Pending Inspection" },
-              { label: "Final ship check", state: "Ready to Ship" }
-            ]}
-          />
-          <DataTableShell title="Operation sequence" subtitle="Dense, compact operational instructions.">
-            <TinyTable
-              columns={["Op", "Work center", "Instruction", "Status"]}
-              rows={[
-                ["10", "Laser", "Cut blanks from AL-6061", <StatusBadge label="Approved" />],
-                ["20", "Press Brake", "Form two bends and check angle", <StatusBadge label="In Production" />],
-                ["30", "Assembly", "Install inserts and label part", <StatusBadge label="Pending Inspection" />]
-              ]}
-            />
-          </DataTableShell>
-          <PrintFooter />
-        </>
+
+          <section className="rounded-md border border-slate-300 bg-white p-6 shadow-none print:border-slate-400">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-300 pb-5">
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Work Order Traveler
+                </div>
+                <h2 className="text-[24px] font-semibold tracking-tight text-slate-950">J-2035</h2>
+                <p className="text-sm text-slate-500">Customer PO {job?.customerPo ?? "PO-8841"} · MetroFab Industries</p>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="grid gap-1 text-right text-xs uppercase tracking-[0.18em] text-slate-500">
+                  <span>Barcode / QR</span>
+                  <div className="rounded-md border border-slate-300 bg-slate-50 px-4 py-3 font-mono text-slate-900">
+                    ||| ||| || ||| ||| J-2035 ||| |||
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 border-b border-slate-300 py-5 md:grid-cols-2 xl:grid-cols-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Work Order</div>
+                <div className="mt-1 text-sm font-semibold text-slate-950">{job?.workOrder ?? "WO-2035"}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer</div>
+                <div className="mt-1 text-sm font-semibold text-slate-950">{job?.customerName ?? "MetroFab Industries"}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer PO</div>
+                <div className="mt-1 text-sm font-semibold text-slate-950">{job?.customerPo ?? "PO-8841"}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Part</div>
+                <div className="mt-1 text-sm font-semibold text-slate-950">{job?.part ?? "Bracket Set Rev A"}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Quantity</div>
+                <div className="mt-1 text-sm font-semibold text-slate-950">{job?.quantity ?? 500}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Revision</div>
+                <div className="mt-1 text-sm font-semibold text-slate-950">Rev A</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Due date</div>
+                <div className="mt-1 text-sm font-semibold text-slate-950">{job?.dueDate ?? "Friday"}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Status</div>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  <StatusBadge label={job?.status ?? "In Production"} />
+                  <SeverityBadge severity="Warning" />
+                </div>
+              </div>
+            </div>
+
+            <div className="py-5">
+              <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Production Routing
+              </div>
+              <div className="overflow-hidden rounded-md border border-slate-300">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-slate-100 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2.5 font-semibold">Step</th>
+                      <th className="px-3 py-2.5 font-semibold">Operation</th>
+                      <th className="px-3 py-2.5 font-semibold">Work center</th>
+                      <th className="px-3 py-2.5 font-semibold">Machine</th>
+                      <th className="px-3 py-2.5 font-semibold">Planned hours</th>
+                      <th className="px-3 py-2.5 font-semibold">Operator</th>
+                      <th className="px-3 py-2.5 font-semibold">Start</th>
+                      <th className="px-3 py-2.5 font-semibold">End</th>
+                      <th className="px-3 py-2.5 font-semibold">Status</th>
+                      <th className="px-3 py-2.5 font-semibold">Sign-off</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-300">
+                    {j2035TravelerRoutingRows.map((row) => (
+                      <tr key={row.step} className={cn(row.operation === "Bend" && "bg-rose-50/40")}>
+                        <td className="px-3 py-3 font-mono font-semibold text-slate-950">{row.step}</td>
+                        <td className="px-3 py-3 text-slate-800">{row.operation}</td>
+                        <td className="px-3 py-3 text-slate-800">{row.workCenter}</td>
+                        <td className="px-3 py-3 font-mono text-slate-700">{row.machine}</td>
+                        <td className="px-3 py-3 font-mono text-slate-700">{row.plannedHours}</td>
+                        <td className="px-3 py-3 text-slate-700">{row.operator}</td>
+                        <td className="px-3 py-3 text-slate-700">{row.start}</td>
+                        <td className="px-3 py-3 text-slate-700">{row.end}</td>
+                        <td className="px-3 py-3">
+                          <StatusBadge label={row.status === "Complete" ? "Approved" : row.status === "In Progress" ? "In Production" : "Pending Inspection"} />
+                        </td>
+                        <td className="px-3 py-3 font-mono text-slate-700">{row.signOff}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="grid gap-4 border-t border-slate-300 pt-5 xl:grid-cols-2">
+              <section className="space-y-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Materials</div>
+                <div className="overflow-hidden rounded-md border border-slate-300">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-100 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2.5 font-semibold">Material SKU</th>
+                        <th className="px-3 py-2.5 font-semibold">Material name</th>
+                        <th className="px-3 py-2.5 font-semibold">Required</th>
+                        <th className="px-3 py-2.5 font-semibold">Reserved</th>
+                        <th className="px-3 py-2.5 font-semibold">Lot number</th>
+                        <th className="px-3 py-2.5 font-semibold">Sign-off</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-300">
+                      {j2035TravelerMaterials.map((row) => (
+                        <tr key={row.sku}>
+                          <td className="px-3 py-3">
+                            <EntityLink href={`/materials/${row.sku.toLowerCase()}`}>{row.sku}</EntityLink>
+                          </td>
+                          <td className="px-3 py-3 text-slate-800">{row.name}</td>
+                          <td className="px-3 py-3 text-slate-700">{row.requiredQuantity}</td>
+                          <td className="px-3 py-3 text-slate-700">{row.reservedQuantity}</td>
+                          <td className="px-3 py-3 font-mono text-slate-700">{row.lotNumber}</td>
+                          <td className="px-3 py-3">
+                            <StatusBadge label={row.signOff} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Operator sign-off</div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {j2035TravelerSignOffFields.map((field) => (
+                    <div key={field.label} className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{field.label}</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">{field.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            <div className="grid gap-4 border-t border-slate-300 pt-5 xl:grid-cols-3">
+              <section className="space-y-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Quality inspection</div>
+                <div className="space-y-2 rounded-md border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700">
+                  {j2035QualityInspectionChecks.slice(0, 3).map((check) => (
+                    <div key={check.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2.5">
+                      <span>{check.label}</span>
+                      <StatusBadge label={check.value} />
+                    </div>
+                  ))}
+                  <div className="grid gap-3 md:grid-cols-3">
+                    {j2035QualityInspectionChecks.slice(3).map((check) => (
+                      <div key={check.label} className="rounded-md border border-slate-200 bg-white px-3 py-2.5">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{check.label}</div>
+                        <div className="mt-2 text-sm font-medium text-slate-950">{check.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Scrap and rework</div>
+                <div className="space-y-2 rounded-md border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700">
+                  {j2035ScrapAndReworkFields.map((field) => (
+                    <div key={field.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2.5">
+                      <span>{field.label}</span>
+                      <span className="font-medium text-slate-950">{field.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Shipping sign-off</div>
+                <div className="space-y-2 rounded-md border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700">
+                  {j2035TravelerShipping.map((item) => (
+                    <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2.5">
+                      <span>{item.label}</span>
+                      <span className="font-medium text-slate-950">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            <PrintFooter preparedAt="Today 10:42 AM" version="v1.0" generatedBy="Prepared from seeded demo data" />
+            <div className="flex justify-end">
+              <Link
+                href="/quality/j-2042/scrap-approval"
+                className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                Review quality exception J-2042
+              </Link>
+            </div>
+          </section>
+        </div>
       );
+      }
 
     case "quality":
       return (
