@@ -8,6 +8,20 @@ export type Customer = {
   state: string;
 };
 
+export type CustomerProfile = {
+  slug: string;
+  name: string;
+  accountContact: string;
+  email: string;
+  phone: string;
+  status: Customer["status"];
+  openJobs: number;
+  openQuotes: number;
+  onTimeDeliveryRate: number;
+  lastUpdated: string;
+  tabs: string[];
+};
+
 export type WorkCenter = {
   id: string;
   name: string;
@@ -409,6 +423,55 @@ export type Report = {
   summary: string;
   generatedAt: string;
   savedAs?: string;
+};
+
+export type CustomerServiceSummary = {
+  customerStatusRequestsToday: number;
+  jobsDueThisWeek: number;
+  jobsAtRisk: number;
+  jobsReadyToShip: number;
+  jobsWaitingOnMaterial: number;
+  reportsGeneratedToday: number;
+};
+
+export type CustomerRiskQueueRow = {
+  jobId: string;
+  customerName: string;
+  customerPo: string;
+  part: string;
+  currentInternalStatus: string;
+  dueDate: string;
+  customerFacingStatus: string;
+  internalBlocker: string;
+  lastUpdate: string;
+  href: string;
+  highlight?: boolean;
+};
+
+export type CustomerStatusReport = {
+  customer: string;
+  contact: string;
+  jobId: string;
+  customerPo: string;
+  part: string;
+  quantity: number;
+  dueDate: string;
+  currentStatus: string;
+  customerFacingStatus: string;
+  progress: number;
+  nextMilestone: string;
+  shipmentReadiness: string;
+  preparedBy: string;
+  preparedTimestamp: string;
+  message: string;
+  reportSavedTo: string;
+};
+
+export type CustomerSafeTimelineItem = {
+  title: string;
+  detail: string;
+  timestamp: string;
+  severity: "Info" | "Warning" | "Critical" | "Blocked" | "Approval" | "Automation" | "Success";
 };
 
 export type AuditEvent = {

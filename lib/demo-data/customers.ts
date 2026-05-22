@@ -1,4 +1,4 @@
-import type { Customer } from "./types";
+import type { Customer, CustomerProfile } from "./types";
 
 export const customers: Customer[] = [
   {
@@ -47,3 +47,17 @@ export const customers: Customer[] = [
     state: "IN"
   }
 ];
+
+export const metrofabCustomerProfile: CustomerProfile = {
+  slug: "metrofab-industries",
+  name: "MetroFab Industries",
+  accountContact: "Elena Morris",
+  email: "elena.morris@metrofab.example",
+  phone: "+1 555-0134",
+  status: "Active",
+  openJobs: 3,
+  openQuotes: 1,
+  onTimeDeliveryRate: 94,
+  lastUpdated: "Today 11:18 AM",
+  tabs: ["Open Jobs", "Quotes", "Shipments", "Status Reports", "Notes", "Audit"]
+};

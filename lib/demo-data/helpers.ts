@@ -4,6 +4,10 @@ import type {
   DefectReasonBreakdownRow,
   Customer,
   CustomerSafeJobStatus,
+  CustomerRiskQueueRow,
+  CustomerServiceSummary,
+  CustomerStatusReport,
+  CustomerSafeTimelineItem,
   DashboardMetrics,
   DashboardRiskItem,
   InspectionQueueRow,
@@ -600,4 +604,78 @@ export function getCustomerSafeJobStatus(jobId: string, jobs: Job[]): CustomerSa
     risk: job.risk,
     summary: summaryMap[job.status] ?? "Customer-safe summary available."
   };
+}
+
+export function getCustomerServiceSummary(jobs: Job[], reports: Report[]): CustomerServiceSummary {
+  return {
+    customerStatusRequestsToday: 8,
+    jobsDueThisWeek: jobs.filter((job) => job.dueDate === "Friday" || job.dueDate.includes("days")).length,
+    jobsAtRisk: jobs.filter((job) => job.risk === "Watch" || job.risk === "High" || job.risk === "Critical").length,
+    jobsReadyToShip: jobs.filter((job) => job.status === "Ready to Ship").length,
+    jobsWaitingOnMaterial: jobs.filter((job) => job.status === "Waiting on Material").length,
+    reportsGeneratedToday: reports.filter((report) => report.generatedAt === "Today").length
+  };
+}
+
+export function getCustomerRiskQueue(jobs: Job[]): CustomerRiskQueueRow[] {
+  const queue = [
+    {
+      jobId: "J-2035",
+      customerName: "MetroFab Industries",
+      customerPo: "PO-8841",
+      part: "Bracket Set Rev A",
+      currentInternalStatus: "In Production",
+      dueDate: "Friday",
+      customerFacingStatus: "On Track",
+      internalBlocker: "Current step: Bend",
+      lastUpdate: "Updated 12 min ago",
+      href: "/customer-service/jobs/j-2035",
+      highlight: true
+    },
+    {
+      jobId: "J-2042",
+      customerName: "Northline Fabrication",
+      customerPo: "PO-9027",
+      part: "Bracket Assembly Rev B",
+      currentInternalStatus: "Rework",
+      dueDate: "Due in 2 days",
+      customerFacingStatus: "At Risk",
+      internalBlocker: "Quality rework",
+      lastUpdate: "Updated 8 min ago",
+      href: "/customer-service/jobs/j-2035"
+    },
+    {
+      jobId: "J-2099",
+      customerName: "Apex Rail Components",
+      customerPo: "PO-9182",
+      part: "Mounting Plate Set Rev C",
+      currentInternalStatus: "Waiting on Material",
+      dueDate: "Due in 4 days",
+      customerFacingStatus: "Delayed Risk",
+      internalBlocker: "Material shortage",
+      lastUpdate: "Updated 5 min ago",
+      href: "/customer-service/jobs/j-2035"
+    },
+    {
+      jobId: "J-2070",
+      customerName: "Kepler Machine Works",
+      customerPo: "PO-8755",
+      part: "Guard Rail Assembly",
+      currentInternalStatus: "At Risk",
+      dueDate: "Due soon",
+      customerFacingStatus: "Watch",
+      internalBlocker: "Capacity constraint",
+      lastUpdate: "Updated 18 min ago",
+      href: "/customer-service/jobs/j-2035"
+    }
+  ] satisfies CustomerRiskQueueRow[];
+
+  return queue.filter((row) => jobs.some((job) => job.id === row.jobId));
+}
+
+export function getCustomerStatusReports(
+  report: CustomerStatusReport,
+  timeline: CustomerSafeTimelineItem[]
+) {
+  return { report, timeline };
 }

@@ -199,38 +199,38 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
   },
   "customer-service": {
     path: "/customer-service",
-    title: "Customer Service",
-    summary: "Customer-facing support desk view for job status and communication.",
-    action: "Open support queue",
+    title: "Customer Service Command Center",
+    summary: "Customer-safe communication and status response desk for active jobs.",
+    action: "View customer-safe status",
     audience: "customer"
   },
   "customer-metrofab": {
     path: "/customers/metrofab-industries",
-    title: "MetroFab Industries",
-    summary: "Customer account placeholder for future relationship and account management.",
+    title: "Customer Detail - MetroFab Industries",
+    summary: "Customer account, open jobs, quotes, and status report history.",
     action: "Open account",
     audience: "customer"
   },
   "customer-service-job": {
     path: "/customer-service/jobs/j-2035",
-    title: "Customer Job View",
+    title: "Customer-Facing Job Status - J-2035",
     summary: "Customer-safe summary of J-2035 progress and estimated completion.",
-    action: "Send update",
+    action: "Generate status report",
     audience: "customer",
     demoStep: 11
   },
   "customer-report": {
     path: "/reports/customer-status/j-2035",
-    title: "Customer Status Report",
+    title: "Customer Status Report - J-2035",
     summary: "Customer-ready status report assembled from the live operational record.",
-    action: "Prepare report",
+    action: "Print report",
     audience: "customer",
     demoStep: 11
   },
   "customer-report-print": {
     path: "/reports/customer-status/j-2035/print",
-    title: "Printable Customer Report",
-    summary: "Print-ready customer report placeholder using the same report skeleton.",
+    title: "Printable Customer Report - J-2035",
+    summary: "Print-ready customer report using the same report skeleton.",
     action: "Print report",
     audience: "customer",
     demoStep: 12

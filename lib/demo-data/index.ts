@@ -1,4 +1,4 @@
-export { customers } from "./customers";
+export { customers, metrofabCustomerProfile } from "./customers";
 export {
   jobs,
   j2035ProductionUpdates,
@@ -41,7 +41,7 @@ export {
   q1003ConversionRecord,
   quoteApprovalRequired
 } from "./quotes";
-export { reports } from "./reports";
+export { reports, customerStatusReport, customerSafeTimeline } from "./reports";
 export { auditEvents } from "./audit-events";
 export { workCenters } from "./work-centers";
 export { demoPath } from "../demo-path";
@@ -56,6 +56,9 @@ export {
   getCustomerByName,
   getCustomerBySlug,
   getCustomerSafeJobStatus,
+  getCustomerServiceSummary,
+  getCustomerRiskQueue,
+  getCustomerStatusReports,
   getDashboardRiskItems,
   getDefectReasonBreakdown,
   getJobById,

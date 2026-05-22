@@ -25,6 +25,9 @@ import {
   getAuditEventsByEntity,
   getCapacitySummary,
   getCustomerSafeJobStatus,
+  getCustomerServiceSummary,
+  getCustomerRiskQueue,
+  getCustomerStatusReports,
   getDashboardRiskItems,
   getDashboardMetrics,
   getCapacityRiskJobIds,
@@ -76,6 +79,10 @@ import {
   purchaseRequestState,
   pr3091AuditTrail,
   quotes,
+  reports,
+  customerSafeTimeline,
+  customerStatusReport,
+  metrofabCustomerProfile,
   reworkOrders,
   demoPath,
   getWorkCenterCapacityRows,
@@ -2859,102 +2866,547 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "customer-service":
-      return (
-        <>
-          <CustomerSafeViewLabel />
-          <MetricRow
-            items={[
-              { label: "Open requests", value: "6", detail: "Customer updates pending", tone: "blue" },
-              { label: "At risk", value: "1", detail: "Material delay visible", tone: "amber" },
-              { label: "Completed today", value: "14", detail: "Customer-safe communication sent", tone: "emerald" },
-              { label: "Awaiting reply", value: "2", detail: "Seeded inbox placeholder", tone: "slate" }
-            ]}
-          />
-        </>
-      );
+      {
+        const summary = getCustomerServiceSummary(jobs, reports);
+        const riskQueue = getCustomerRiskQueue(jobs);
+        const customerCards = customers.map((customer) => customer.name);
 
-    case "customer-metrofab":
-      return (
-        <>
-          <CustomerSafeViewLabel />
-          <MetricRow
-            items={[
-              { label: "Account", value: "MetroFab Industries", detail: "Seeded customer account", tone: "blue" },
-              { label: "Active jobs", value: "3", detail: "Shared customer-facing status only", tone: "emerald" },
-              { label: "Open approvals", value: "1", detail: "Awaiting client response", tone: "amber" },
-              { label: "Last update", value: "Today", detail: "No internal notes shown", tone: "slate" }
-            ]}
-          />
-          <DataTableShell title="Customer summary" subtitle="Future phase will connect this to actual CRM data.">
-            <TinyTable
-              columns={["Job", "Public status", "Promise date"]}
-              rows={[
-                [<EntityLink href="/customer-service/jobs/j-2035">J-2035</EntityLink>, <StatusBadge label="In Production" />, "May 29"],
-                [<EntityLink href="/customer-service/jobs/j-2035">J-2042</EntityLink>, <StatusBadge label="Waiting on Material" />, "Jun 02"]
+        return (
+          <div className="space-y-4">
+            <MetricRow
+              items={[
+                { label: "Customer status requests today", value: `${summary.customerStatusRequestsToday}`, detail: "Answer questions without disrupting the floor", tone: "blue" },
+                { label: "Jobs due this week", value: `${summary.jobsDueThisWeek}`, detail: "Promised work still in flight", tone: "amber" },
+                { label: "Jobs at risk", value: `${summary.jobsAtRisk}`, detail: "Watch or higher risk", tone: "rose" },
+                { label: "Jobs ready to ship", value: `${summary.jobsReadyToShip}`, detail: "Customer-safe delivery queue", tone: "emerald" },
+                { label: "Jobs waiting on material", value: `${summary.jobsWaitingOnMaterial}`, detail: "Need procurement or replan", tone: "amber" },
+                { label: "Reports generated today", value: `${summary.reportsGeneratedToday}`, detail: "Customer-safe updates prepared", tone: "emerald" }
               ]}
             />
-          </DataTableShell>
-        </>
-      );
 
-    case "customer-service-job":
-      return (
-        <>
-          <CustomerSafeViewLabel />
-          <PageHeader
-            title={routeMeta[routeKey].title}
-            summary="Customer-safe job status with no internal pricing or exception notes."
-            action="Send status update"
-            audience="customer"
-          />
-          <MetricRow
-            items={[
-              { label: "Job", value: "J-2035", detail: "Public record", tone: "blue" },
-              { label: "Status", value: "In Production", detail: "Shop is working the order", tone: "emerald" },
-              { label: "Next milestone", value: "Inspection", detail: "Expected this week", tone: "amber" },
-              { label: "Customer visibility", value: "Safe", detail: "Internal notes hidden", tone: "slate" }
-            ]}
-          />
-        </>
-      );
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">Customer Service Representative</div>
+                <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Customer Service Command Center</h1>
+                <p className="max-w-4xl text-sm leading-6 text-slate-500">
+                  Now we move from internal operations to customer communication. Customer Service can answer status questions quickly without interrupting the shop floor.
+                </p>
+              </div>
+            </div>
 
-    case "customer-report":
-      return (
-        <>
-          <CustomerSafeViewLabel />
-          <PrintHeader
-            title="Customer Status Report - J-2035"
-            subtitle="Report assembled from the operational source of truth and simplified for customer sharing."
-          />
-          <MetricRow
-            items={[
-              { label: "Progress", value: "72%", detail: "Seeded report metric", tone: "blue" },
-              { label: "Current state", value: "In Production", detail: "Public-safe status", tone: "emerald" },
-              { label: "Risk", value: "Low", detail: "No customer-facing hold", tone: "slate" },
-              { label: "ETA", value: "May 29", detail: "Projected ship date", tone: "amber" }
-            ]}
-          />
-        </>
-      );
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Search-first layout</div>
+              <div className="mt-2 rounded-md border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">
+                Search by job, quote, customer, PO, or part
+              </div>
+            </div>
 
-    case "customer-report-print":
-      return (
-        <>
-          <CustomerSafeViewLabel />
-          <PrintHeader
-            title="Printable Customer Report"
-            subtitle="Print-ready placeholder showing layout and paper-friendly styling."
-          />
-          <div className="rounded-md border border-slate-200 bg-white p-4">
-            <div className="grid gap-3 md:grid-cols-3">
-              <MetricCard label="Job" value="J-2035" detail="Customer-safe" tone="slate" />
-              <MetricCard label="Status" value="In Production" detail="Public view" tone="emerald" />
-              <MetricCard label="ETA" value="May 29" detail="Printed summary" tone="amber" />
+            <DataTableShell title="Customer risk queue" subtitle="Customer-safe statuses are derived from the operational source of truth.">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  <tr>
+                    <th className="px-4 py-2.5 font-semibold">Job</th>
+                    <th className="px-4 py-2.5 font-semibold">Customer</th>
+                    <th className="px-4 py-2.5 font-semibold">Customer PO</th>
+                    <th className="px-4 py-2.5 font-semibold">Part</th>
+                    <th className="px-4 py-2.5 font-semibold">Current internal status</th>
+                    <th className="px-4 py-2.5 font-semibold">Due date</th>
+                    <th className="px-4 py-2.5 font-semibold">Customer-facing status</th>
+                    <th className="px-4 py-2.5 font-semibold">Internal blocker</th>
+                    <th className="px-4 py-2.5 font-semibold">Last update</th>
+                    <th className="px-4 py-2.5 font-semibold">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {riskQueue.map((row) => (
+                    <tr key={row.jobId} className={cn(row.highlight ? "bg-blue-50/70" : "bg-white")}>
+                      <td className="px-4 py-3">
+                        <EntityLink href={row.href}>{row.jobId}</EntityLink>
+                      </td>
+                      <td className="px-4 py-3">{row.customerName}</td>
+                      <td className="px-4 py-3 font-mono text-[13px]">{row.customerPo}</td>
+                      <td className="px-4 py-3">{row.part}</td>
+                      <td className="px-4 py-3">
+                        <StatusBadge label={row.currentInternalStatus} />
+                      </td>
+                      <td className="px-4 py-3">{row.dueDate}</td>
+                      <td className="px-4 py-3">
+                        <SeverityBadge severity={row.customerFacingStatus === "On Track" ? "Success" : row.customerFacingStatus === "Watch" ? "Warning" : "Critical"} />
+                        <span className="ml-2 text-sm text-slate-600">{row.customerFacingStatus}</span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{row.internalBlocker}</td>
+                      <td className="px-4 py-3 text-slate-600">{row.lastUpdate}</td>
+                      <td className="px-4 py-3">
+                        <Link
+                          href={row.href}
+                          className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800"
+                        >
+                          {row.jobId === "J-2035" ? "View status" : "View"}
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </DataTableShell>
+
+            <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+              <DataTableShell title="Recent customer records" subtitle="MetroFab is the demo target for the customer-service walkthrough.">
+                <div className="space-y-2 p-4">
+                  {customerCards.map((customer) => (
+                    <div key={customer} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <span className="text-sm font-medium text-slate-950">{customer}</span>
+                      {customer === "MetroFab Industries" ? (
+                        <Link
+                          href="/customers/metrofab-industries"
+                          className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                        >
+                          Open customer
+                        </Link>
+                      ) : (
+                        <StatusBadge label="Active" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </DataTableShell>
+
+              <TimelineShell title="Demo path" subtitle="Step 11 of 13 - Customer Status Report - J-2035">
+                <div className="space-y-3">
+                  <RiskAlert
+                    severity="Info"
+                    title="View customer-safe status for J-2035"
+                    description="This route strips out sensitive internal detail while preserving accurate delivery communication."
+                    href="/customer-service/jobs/j-2035"
+                    actionLabel="View customer-safe status"
+                  />
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+                    Customer Service can answer status questions quickly without interrupting the shop floor.
+                  </div>
+                </div>
+              </TimelineShell>
             </div>
           </div>
-          <PrintFooter />
-        </>
-      );
+        );
+      }
+
+    case "customer-metrofab":
+      {
+        const customerJobs = jobs.filter((job) => job.customerSlug === "metrofab-industries" || job.id === "J-2035");
+
+        return (
+          <div className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CustomerSafeViewLabel />
+                    <StatusBadge label={metrofabCustomerProfile.status} />
+                  </div>
+                  <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Customer Detail - MetroFab Industries</h1>
+                  <div className="grid gap-x-4 gap-y-1 text-sm text-slate-600 md:grid-cols-2">
+                    <div>Account contact: <span className="font-medium text-slate-950">{metrofabCustomerProfile.accountContact}</span></div>
+                    <div>Email: <span className="font-medium text-slate-950">{metrofabCustomerProfile.email}</span></div>
+                    <div>Phone: <span className="font-medium text-slate-950">{metrofabCustomerProfile.phone}</span></div>
+                    <div>Open jobs: <span className="font-medium text-slate-950">{metrofabCustomerProfile.openJobs}</span></div>
+                    <div>Open quotes: <span className="font-medium text-slate-950">{metrofabCustomerProfile.openQuotes}</span></div>
+                    <div>On-time delivery rate: <span className="font-medium text-slate-950">{metrofabCustomerProfile.onTimeDeliveryRate}%</span></div>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <MetricCard label="Customer status" value={metrofabCustomerProfile.status} detail="Active account" tone="emerald" />
+                  <MetricCard label="Open jobs" value={`${metrofabCustomerProfile.openJobs}` } detail="Production and support" tone="blue" />
+                  <MetricCard label="Open quotes" value={`${metrofabCustomerProfile.openQuotes}` } detail="Commercial pipeline" tone="amber" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {metrofabCustomerProfile.tabs.map((tab, index) => (
+                <span
+                  key={tab}
+                  className={cn(
+                    "rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em]",
+                    index === 0 ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-slate-50 text-slate-600"
+                  )}
+                >
+                  {tab}
+                </span>
+              ))}
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+              <DataTableShell title="Open jobs" subtitle="Active MetroFab jobs available to Customer Service.">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                    <tr>
+                      <th className="px-4 py-2.5 font-semibold">Job</th>
+                      <th className="px-4 py-2.5 font-semibold">Customer PO</th>
+                      <th className="px-4 py-2.5 font-semibold">Part</th>
+                      <th className="px-4 py-2.5 font-semibold">Quantity</th>
+                      <th className="px-4 py-2.5 font-semibold">Current status</th>
+                      <th className="px-4 py-2.5 font-semibold">Due date</th>
+                      <th className="px-4 py-2.5 font-semibold">Risk</th>
+                      <th className="px-4 py-2.5 font-semibold">Last update</th>
+                      <th className="px-4 py-2.5 font-semibold">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {customerJobs.map((job) => (
+                      <tr key={job.id} className={job.id === "J-2035" ? "bg-blue-50/70" : "bg-white"}>
+                        <td className="px-4 py-3">
+                          <EntityLink href="/customer-service/jobs/j-2035">{job.id}</EntityLink>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-[13px]">{job.customerPo}</td>
+                        <td className="px-4 py-3">{job.part}</td>
+                        <td className="px-4 py-3">{job.quantity}</td>
+                        <td className="px-4 py-3">
+                          <StatusBadge label={job.id === "J-2035" ? "In Production" : job.status} />
+                        </td>
+                        <td className="px-4 py-3">{job.dueDate}</td>
+                        <td className="px-4 py-3">
+                          <SeverityBadge severity={job.risk === "None" ? "Info" : job.risk === "Low" ? "Success" : job.risk === "Watch" ? "Warning" : job.risk === "High" ? "Critical" : "Blocked"} />
+                        </td>
+                        <td className="px-4 py-3">{job.id === "J-2035" ? "Updated 12 min ago" : "Updated recently"}</td>
+                        <td className="px-4 py-3">
+                          <Link
+                            href="/customer-service/jobs/j-2035"
+                            className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800"
+                          >
+                            View customer-safe status
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </DataTableShell>
+
+              <TimelineShell title="Status reports" subtitle="Previous and generated report preview.">
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer Job Status Report</div>
+                    <div className="mt-2 text-sm font-medium text-slate-950">J-2035</div>
+                    <div className="mt-1 text-sm text-slate-600">Prepared by Customer Service</div>
+                    <div className="mt-1 text-sm text-slate-600">Status: Generated</div>
+                    <div className="mt-1 text-sm text-slate-600">Last update: Today 3:01 PM</div>
+                    <div className="mt-3">
+                      <Link
+                        href="/reports/customer-status/j-2035"
+                        className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                      >
+                        Open report
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </TimelineShell>
+            </div>
+          </div>
+        );
+      }
+
+    case "customer-service-job":
+      {
+        const customerSafe = getCustomerSafeJobStatus("J-2035", jobs);
+        const customerSafeSummary =
+          customerSafe?.summary ??
+          "This view hides margin, internal cost, operator blame, detailed scrap blame, supervisor-only notes, and internal approval comments.";
+
+        return (
+          <div className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <EntityLink href="/jobs/j-2035">J-2035</EntityLink>
+                    <CustomerSafeViewLabel />
+                    <StatusBadge label="On Track" />
+                  </div>
+                  <p className="max-w-3xl text-sm leading-6 text-slate-500">
+                    {customerSafeSummary}
+                  </p>
+                  <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Customer-Facing Job Status - J-2035</h1>
+                  <div className="grid gap-x-4 gap-y-1 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
+                    <div>Customer: <span className="font-medium text-slate-950">MetroFab Industries</span></div>
+                    <div>Customer PO: <span className="font-medium text-slate-950">PO-8841</span></div>
+                    <div>Part: <span className="font-medium text-slate-950">Bracket Set Rev A</span></div>
+                    <div>Quantity: <span className="font-medium text-slate-950">500</span></div>
+                    <div>Due date: <span className="font-medium text-slate-950">Friday</span></div>
+                    <div>Customer-facing status: <span className="font-medium text-slate-950">{customerSafe?.summary ? "On Track" : "On Track"}</span></div>
+                    <div>Internal status: <span className="font-medium text-slate-950">{customerSafe?.status ?? "In Production"}</span></div>
+                    <div>Current routing step: <span className="font-medium text-slate-950">Bend</span></div>
+                    <div>Work center: <span className="font-medium text-slate-950">Press Brake</span></div>
+                    <div>Progress: <span className="font-medium text-slate-950">62%</span></div>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <MetricCard label="Customer-facing status" value="On Track" detail="Safe to share" tone="emerald" />
+                  <MetricCard label="Internal status" value="In Production" detail="Operational record" tone="blue" />
+                  <MetricCard label="Progress" value="62%" detail="Bend in progress" tone="amber" />
+                </div>
+              </div>
+            </div>
+
+            <TimelineShell title="Customer-safe view" subtitle="This view hides margin, internal cost, operator blame, supervisor-only notes, and sensitive quality details.">
+              <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+                This view hides margin, internal cost, operator blame, supervisor-only notes, and sensitive quality details.
+              </div>
+              <div className="space-y-2">
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Quote approved</div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Work order released</div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Material reserved</div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Cutting complete</div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Bending in progress</div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Welding pending</div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Finishing pending</div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Quality inspection pending</div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Packing and shipment pending</div>
+              </div>
+            </TimelineShell>
+
+            <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+              <TimelineShell title="Customer update summary" subtitle="Short, accurate communication for MetroFab Industries.">
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+                    <div className="font-semibold text-slate-950">Current status</div>
+                    <p className="mt-1">In production</p>
+                    <div className="mt-3 font-semibold text-slate-950">Next milestone</div>
+                    <p className="mt-1">Welding</p>
+                    <div className="mt-3 font-semibold text-slate-950">Expected completion</div>
+                    <p className="mt-1">On schedule</p>
+                    <div className="mt-3 font-semibold text-slate-950">Shipping readiness</div>
+                    <p className="mt-1">Pending final quality inspection</p>
+                  </div>
+                <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+                  Your order is currently in production and remains on schedule. The bending step is in progress, with welding and final inspection scheduled next.
+                </div>
+              </div>
+            </TimelineShell>
+
+              <TimelineShell title="Hidden internal data reminder" subtitle="Do not expose sensitive shop-floor detail.">
+                <div className="space-y-2 text-sm text-slate-700">
+                  {[
+                    "Margin",
+                    "Internal cost",
+                    "Operator blame",
+                    "Detailed scrap blame",
+                    "Supervisor-only notes",
+                    "Internal approval comments"
+                  ].map((item) => (
+                    <div key={item} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </TimelineShell>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
+                Copy customer update
+              </button>
+              <Link href="/reports/customer-status/j-2035" className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800">
+                Generate status report
+              </Link>
+              <button type="button" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
+                Email report
+              </button>
+              <Link href="/reports/customer-status/j-2035/print" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
+                Print report
+              </Link>
+              <Link href="/jobs/j-2035" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
+                View internal job detail
+              </Link>
+            </div>
+          </div>
+        );
+      }
+
+    case "customer-report":
+      {
+        const customerReport = getCustomerStatusReports(customerStatusReport, customerSafeTimeline);
+
+        return (
+          <div className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">Generated report status</div>
+                <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Customer Status Report - J-2035</h1>
+                <p className="max-w-4xl text-sm leading-6 text-slate-500">
+                  This report gives Customer Service a professional, customer-safe way to communicate accurate status without exposing sensitive internal operations.
+                </p>
+                <div className="text-sm text-slate-600">
+                  Report saved under <span className="font-medium text-slate-950">{customerReport.report.reportSavedTo}</span>
+                </div>
+                <div className="text-sm text-slate-600">
+                  Last customer update timestamp: <span className="font-medium text-slate-950">{customerReport.report.preparedTimestamp}</span>
+                </div>
+              </div>
+            </div>
+
+            <PrintHeader
+              title="Customer Status Report - J-2035"
+              subtitle="Report assembled from the operational source of truth and simplified for customer sharing."
+            />
+
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 print:border-slate-300">
+              Company Header Placeholder
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+              <div className="space-y-4">
+                <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <MetricCard label="Customer" value={customerReport.report.customer} detail={customerReport.report.contact} tone="blue" />
+                    <MetricCard label="Current status" value={customerReport.report.currentStatus} detail={customerReport.report.customerFacingStatus} tone="emerald" />
+                    <MetricCard label="Progress" value={`${customerReport.report.progress}%`} detail="Customer-safe" tone="amber" />
+                    <MetricCard label="Next milestone" value={customerReport.report.nextMilestone} detail="Welding is next" tone="slate" />
+                    <MetricCard label="Shipment readiness" value={customerReport.report.shipmentReadiness} detail="Pending inspection" tone="rose" />
+                    <MetricCard label="Prepared by" value={customerReport.report.preparedBy} detail={customerReport.report.preparedTimestamp} tone="blue" />
+                  </div>
+                </div>
+
+                <TimelineShell title="Customer-safe timeline" subtitle="Shared from the same operational source of truth, but without internal detail.">
+                  <div className="space-y-2">
+                    {customerReport.timeline.map((item) => (
+                      <div key={item.title} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <div>
+                          <div className="text-sm font-medium text-slate-950">{item.title}</div>
+                          <div className="text-sm text-slate-600">{item.detail}</div>
+                        </div>
+                        <SeverityBadge severity={item.severity} />
+                      </div>
+                    ))}
+                  </div>
+                </TimelineShell>
+
+                <TimelineShell title="Customer-safe message" subtitle="What Customer Service can send with confidence.">
+                  <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+                    {customerReport.report.message}
+                  </div>
+                </TimelineShell>
+              </div>
+
+              <AuditPanel
+                title="Audit preview"
+                subtitle="Standardized event from customer report generation."
+                items={[
+                  {
+                    actor: "Customer Service",
+                    actorRole: "Customer Service Representative",
+                    event: "Generated customer status report",
+                    time: customerReport.report.preparedTimestamp,
+                    detail: "Customer-facing report created",
+                    severity: "Info",
+                    entityHref: "/customer-service/jobs/j-2035",
+                    entityLabel: "J-2035",
+                    result: "Customer-facing report created",
+                    notes: "Report saved to MetroFab Industries customer record",
+                    entityType: "Job"
+                  }
+                ]}
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Link href="/reports/customer-status/j-2035/print" className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800">
+                Print report
+              </Link>
+              <Link href="/audit" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
+                View full audit trail
+              </Link>
+              <Link href="/customer-service/jobs/j-2035" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
+                Back to customer-safe status
+              </Link>
+            </div>
+          </div>
+        );
+      }
+
+    case "customer-report-print":
+      {
+        const customerReport = customerStatusReport;
+
+        return (
+          <div className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none print:border-0 print:p-0">
+              <div className="flex items-center justify-between gap-4 print:hidden">
+                <CustomerSafeViewLabel />
+                <div className="flex items-center gap-2">
+                  <PrintButton />
+                  <Link href="/reports/customer-status/j-2035" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
+                    Back to report preview
+                  </Link>
+                  <Link href="/audit" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
+                    View audit trail
+                  </Link>
+                </div>
+              </div>
+
+              <PrintHeader
+                title="Customer Job Status Report"
+                subtitle="MetroFab Industries - customer-safe status summary"
+              />
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <MetricCard label="Customer" value={customerReport.customer} detail={customerReport.contact} tone="slate" />
+                <MetricCard label="Job" value={customerReport.jobId} detail={customerReport.customerPo} tone="blue" />
+                <MetricCard label="Current status" value={customerReport.currentStatus} detail={customerReport.customerFacingStatus} tone="emerald" />
+                <MetricCard label="Progress" value={`${customerReport.progress}%`} detail="Customer-safe" tone="amber" />
+                <MetricCard label="Next milestone" value={customerReport.nextMilestone} detail="Welding is next" tone="slate" />
+                <MetricCard label="Prepared by" value={customerReport.preparedBy} detail={customerReport.preparedTimestamp} tone="blue" />
+              </div>
+
+              <div className="mt-4 rounded-md border border-slate-200 bg-white p-4 print:border-slate-300">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {[
+                    ["Customer", customerReport.customer],
+                    ["Contact", customerReport.contact],
+                    ["Job", customerReport.jobId],
+                    ["Customer PO", customerReport.customerPo],
+                    ["Part", customerReport.part],
+                    ["Quantity", `${customerReport.quantity}`],
+                    ["Due date", customerReport.dueDate],
+                    ["Current status", customerReport.currentStatus],
+                    ["Customer-facing status", customerReport.customerFacingStatus],
+                    ["Progress", `${customerReport.progress}%`],
+                    ["Next milestone", customerReport.nextMilestone],
+                    ["Shipment readiness", customerReport.shipmentReadiness],
+                    ["Prepared by", customerReport.preparedBy],
+                    ["Prepared timestamp", customerReport.preparedTimestamp]
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</div>
+                      <div className="mt-2 text-sm font-medium text-slate-950">{value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <TimelineShell title="Customer-safe timeline" subtitle="Printed report keeps the communication aligned and readable.">
+                <div className="space-y-2">
+                  {customerSafeTimeline.map((item) => (
+                    <div key={item.title} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div>
+                        <div className="text-sm font-medium text-slate-950">{item.title}</div>
+                        <div className="text-sm text-slate-600">{item.detail}</div>
+                      </div>
+                      <SeverityBadge severity={item.severity} />
+                    </div>
+                  ))}
+                </div>
+              </TimelineShell>
+
+              <div className="mt-4 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+                {customerReport.message}
+              </div>
+
+              <PrintFooter />
+            </div>
+          </div>
+        );
+      }
 
     case "audit":
       {
