@@ -1,0 +1,76 @@
+import { calculateScrapRate } from "./helpers";
+import type { Job } from "./types";
+
+export const jobs: Job[] = [
+  {
+    id: "J-2035",
+    slug: "j-2035",
+    customerSlug: "metrofab-industries",
+    customerName: "MetroFab Industries",
+    customerPo: "PO-8841",
+    part: "Bracket Set Rev A",
+    quantity: 500,
+    completedQuantity: 310,
+    scrapQuantity: 6,
+    status: "In Production",
+    currentStep: "Bend",
+    workCenter: "Press Brake",
+    risk: "Watch",
+    dueDate: "Friday",
+    workOrder: "WO-2035",
+    progress: 62
+  },
+  {
+    id: "J-2042",
+    slug: "j-2042",
+    customerSlug: "northline-fabrication",
+    customerName: "Northline Fabrication",
+    customerPo: "PO-9027",
+    part: "Bracket Assembly Rev B",
+    quantity: 200,
+    completedQuantity: 180,
+    scrapQuantity: 18,
+    scrapRate: calculateScrapRate(18, 180),
+    allowedTolerance: 0.05,
+    status: "Scrap Approval Required",
+    currentStep: "Weld",
+    workCenter: "Welding",
+    risk: "Critical",
+    dueDate: "Friday",
+    reworkOrder: "RW-2042-01",
+    progress: 90
+  },
+  {
+    id: "J-2099",
+    slug: "j-2099",
+    customerSlug: "apex-rail-components",
+    customerName: "Apex Rail Components",
+    customerPo: "PO-9182",
+    part: "Mounting Plate Set Rev C",
+    quantity: 120,
+    status: "Waiting on Material",
+    blockedStep: "CNC Mill",
+    workCenter: "CNC Mill",
+    requiredMaterial: "AL-6061-PLT-0.375",
+    shortageSheets: 44,
+    risk: "High",
+    dueDate: "Next Tuesday",
+    progress: 18
+  },
+  {
+    id: "J-2104",
+    slug: "j-2104",
+    customerSlug: "northline-fabrication",
+    customerName: "Northline Fabrication",
+    sourceQuoteId: "Q-1003",
+    workOrder: "WO-2104",
+    part: "Custom Welded Frame Assembly",
+    quantity: 75,
+    status: "Approved",
+    currentStep: "Routing generated from quote",
+    workCenter: "Scheduling",
+    risk: "Low",
+    dueDate: "Ready for release",
+    progress: 100
+  }
+];

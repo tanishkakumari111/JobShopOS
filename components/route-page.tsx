@@ -16,6 +16,26 @@ import { PrintFooter } from "@/components/print-footer";
 import { allStatusGroups } from "@/lib/status";
 import { routeMeta, type RouteKey } from "@/lib/routes";
 import { cn } from "@/lib/utils";
+import {
+  auditEvents,
+  calculateScrapRate,
+  customers,
+  getAuditEventsByEntity,
+  getCapacitySummary,
+  getCustomerSafeJobStatus,
+  getDashboardRiskItems,
+  getJobById,
+  getMaterialBySku,
+  getPurchaseRequestById,
+  getQuoteById,
+  getReworkOrderById,
+  jobs,
+  materials,
+  purchaseRequests,
+  quotes,
+  reworkOrders,
+  workCenters
+} from "@/lib/demo-data";
 
 function PageHeader({
   title,
@@ -134,135 +154,171 @@ function Checklist({
 function routeBlocks(routeKey: RouteKey) {
   switch (routeKey) {
     case "home":
-      return (
-        <>
-          <MetricRow
-            items={[
-              { label: "Open jobs", value: "42", detail: "8 due this week", tone: "blue" },
-              { label: "Capacity bottleneck", value: "Press Brake", detail: "112% load", tone: "amber" },
-              { label: "Quality holds", value: "3", detail: "1 needs approval", tone: "rose" },
-              { label: "On-time promise", value: "96.4%", detail: "Based on seeded schedule", tone: "emerald" }
-            ]}
-          />
+      {
+        const capacitySummary = getCapacitySummary(workCenters);
+        const risks = getDashboardRiskItems(jobs, quotes, materials);
 
-          <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-            <RiskAlert
-              severity="Critical"
-              title="Press Brake is constraining the queue"
-              description="The scheduler can see the bottleneck before jobs are released. Later phases will connect the capacity model to live work-center logic."
-              href="/capacity"
-              actionLabel="Inspect capacity"
-            />
-            <TimelineShell
-              title="Recent operational signals"
-              subtitle="Seeded events that later become live notifications."
-            >
-              <div className="space-y-3">
-                <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div>
-                    <div className="text-sm font-medium">J-2035 moved to production</div>
-                    <div className="text-xs text-slate-500">Ops queue updated 12 minutes ago</div>
-                  </div>
-                  <StatusBadge label="In Production" />
-                </div>
-                <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div>
-                    <div className="text-sm font-medium">AL-6061 sheet reserved</div>
-                    <div className="text-xs text-slate-500">Material pull created for job J-2099</div>
-                  </div>
-                  <StatusBadge label="Reserved" />
-                </div>
-                <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div>
-                    <div className="text-sm font-medium">Q-1003 submitted for approval</div>
-                    <div className="text-xs text-slate-500">Commercial review started</div>
-                  </div>
-                  <StatusBadge label="Needs Owner Approval" />
-                </div>
-              </div>
-            </TimelineShell>
-          </div>
-
-          <DataTableShell
-            title="Active exceptions"
-            subtitle="Compact table shell for later operational lists."
-            actions={<EntityLink href="/audit">Open audit trail</EntityLink>}
-          >
-            <TinyTable
-              columns={["Entity", "Status", "Risk", "Owner"]}
-              rows={[
-                [
-                  <EntityLink href="/jobs/j-2035">J-2035</EntityLink>,
-                  <StatusBadge label="In Production" />,
-                  <SeverityBadge severity="Warning" />,
-                  "Scheduler"
-                ],
-                [
-                  <EntityLink href="/quality/j-2042/scrap-approval">J-2042</EntityLink>,
-                  <StatusBadge label="Scrap Approval Required" />,
-                  <SeverityBadge severity="Critical" />,
-                  "Quality Inspector"
-                ],
-                [
-                  <EntityLink href="/purchase-requests/pr-3091">PR-3091</EntityLink>,
-                  <StatusBadge label="Purchase Requested" />,
-                  <SeverityBadge severity="Approval" />,
-                  "Purchasing"
-                ]
+        return (
+          <>
+            <MetricRow
+              items={[
+                {
+                  label: "Open jobs",
+                  value: `${jobs.length}`,
+                  detail: `${jobs.filter((job) => job.status === "In Production" || job.status === "Waiting on Material").length} active exceptions`,
+                  tone: "blue"
+                },
+                {
+                  label: "Capacity bottleneck",
+                  value: capacitySummary.bottleneckLabel,
+                  detail: `${capacitySummary.utilization}% load`,
+                  tone: "amber"
+                },
+                {
+                  label: "Quality holds",
+                  value: `${jobs.filter((job) => job.status === "Scrap Approval Required").length}`,
+                  detail: `${jobs.find((job) => job.id === "J-2042")?.id ?? "J-2042"} needs approval`,
+                  tone: "rose"
+                },
+                {
+                  label: "On-time promise",
+                  value: "96.4%",
+                  detail: "Based on seeded schedule",
+                  tone: "emerald"
+                }
               ]}
             />
-          </DataTableShell>
-        </>
-      );
 
-    case "capacity":
-      return (
-        <>
-          <MetricRow
-            items={[
-              { label: "Available hours", value: "184", detail: "Across seeded work centers", tone: "emerald" },
-              { label: "Near capacity", value: "2 lines", detail: "One is at the press brake", tone: "amber" },
-              { label: "Over capacity", value: "1 line", detail: "Triggered by J-2099 material impact", tone: "rose" },
-              { label: "Bottlenecks", value: "Press Brake", detail: "Primary constraint", tone: "blue" }
-            ]}
-          />
-          <div className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
-            <DataTableShell title="Work center load" subtitle="Placeholder capacity grid for the scheduler view.">
+            <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+              <RiskAlert
+                severity={risks[0]?.severity ?? "Critical"}
+                title={risks[0]?.title ?? "Press Brake is constraining the queue"}
+                description={risks[0]?.description ?? "The scheduler can see the bottleneck before jobs are released."}
+                href={risks[0]?.href ?? "/capacity"}
+                actionLabel="Inspect capacity"
+              />
+              <TimelineShell
+                title="Recent operational signals"
+                subtitle="Seeded events that later become live notifications."
+              >
+                <div className="space-y-3">
+                  {jobs
+                    .filter((job) => ["J-2035", "J-2099", "J-2042"].includes(job.id))
+                    .map((job) => (
+                      <div
+                        key={job.id}
+                        className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5"
+                      >
+                        <div>
+                          <div className="text-sm font-medium">
+                            {job.id} moved to {job.status.toLowerCase()}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {job.customerName} - {job.part}
+                          </div>
+                        </div>
+                        <StatusBadge label={job.status} />
+                      </div>
+                    ))}
+                </div>
+              </TimelineShell>
+            </div>
+
+            <DataTableShell
+              title="Active exceptions"
+              subtitle="Compact table shell for later operational lists."
+              actions={<EntityLink href="/audit">Open audit trail</EntityLink>}
+            >
               <TinyTable
-                columns={["Work center", "Load", "Status", "Next action"]}
+                columns={["Entity", "Status", "Risk", "Owner"]}
                 rows={[
                   [
-                    "Laser",
-                    "68%",
-                    <StatusBadge label="Available" />,
-                    "No action"
+                    <EntityLink href="/jobs/j-2035">J-2035</EntityLink>,
+                    <StatusBadge label="In Production" />,
+                    <SeverityBadge severity="Warning" />,
+                    "Scheduler"
                   ],
                   [
-                    "Press Brake",
-                    "112%",
-                    <StatusBadge label="Bottleneck" />,
-                    <EntityLink href="/jobs/j-2035">Resequence J-2035</EntityLink>
+                    <EntityLink href="/quality/j-2042/scrap-approval">J-2042</EntityLink>,
+                    <StatusBadge label="Scrap Approval Required" />,
+                    <SeverityBadge severity="Critical" />,
+                    "Quality Inspector"
                   ],
                   [
-                    "Assembly",
-                    "91%",
-                    <StatusBadge label="Near Capacity" />,
-                    "Monitor queue"
+                    <EntityLink href="/purchase-requests/pr-3091">PR-3091</EntityLink>,
+                    <StatusBadge label="Purchase Requested" />,
+                    <SeverityBadge severity="Approval" />,
+                    "Purchasing"
                   ]
                 ]}
               />
             </DataTableShell>
+          </>
+        );
+      }
 
-            <RiskAlert
-              severity="Critical"
-              title="Press Brake will delay release"
-              description="The demo shows how capacity pressure becomes visible before a job is released. A later phase can add drag-to-reschedule and live load balancing."
-              href="/jobs/j-2035"
-              actionLabel="Inspect impacted job"
+    case "capacity":
+      {
+        const summary = getCapacitySummary(workCenters);
+
+        return (
+          <>
+            <MetricRow
+              items={[
+                {
+                  label: "Available hours",
+                  value: `${workCenters.reduce((sum, workCenter) => sum + workCenter.capacityHoursPerWeek, 0)}`,
+                  detail: "Across seeded work centers",
+                  tone: "emerald"
+                },
+                {
+                  label: "Near capacity",
+                  value: `${summary.nearCapacityWorkCenters} lines`,
+                  detail: "One is at the press brake",
+                  tone: "amber"
+                },
+                {
+                  label: "Over capacity",
+                  value: `${summary.overCapacityWorkCenters} line`,
+                  detail: "Triggered by J-2099 material impact",
+                  tone: "rose"
+                },
+                {
+                  label: "Bottlenecks",
+                  value: summary.bottleneckLabel,
+                  detail: `${summary.utilization}% utilization`,
+                  tone: "blue"
+                }
+              ]}
             />
-          </div>
-        </>
-      );
+            <div className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
+              <DataTableShell title="Work center load" subtitle="Seeded capacity grid for the scheduler view.">
+                <TinyTable
+                  columns={["Work center", "Load", "Status", "Next action"]}
+                  rows={workCenters.map((workCenter) => [
+                    workCenter.name,
+                    `${workCenter.utilization}%`,
+                    <StatusBadge label={workCenter.status} />,
+                    workCenter.status === "Bottleneck" ? (
+                      <EntityLink href="/jobs/j-2035">Resequence J-2035</EntityLink>
+                    ) : (
+                      "Monitor queue"
+                    )
+                  ])}
+                />
+              </DataTableShell>
+
+              <RiskAlert
+                severity="Critical"
+                title={`Press Brake is operating at ${summary.utilization}% capacity`}
+                description={`Queued ${summary.queuedHoursPerWeek}h against ${summary.capacityHoursPerWeek}h capacity. The demo shows how the bottleneck becomes visible before a job is released.`}
+                href="/jobs/j-2035"
+                actionLabel="Inspect impacted job"
+              />
+            </div>
+          </>
+        );
+      }
 
     case "jobs":
       return (
@@ -301,62 +357,80 @@ function routeBlocks(routeKey: RouteKey) {
       );
 
     case "job-2035":
-      return (
-        <>
-          <MetricRow
-            items={[
-              { label: "Current status", value: "In Production", detail: "Released and visible to the floor", tone: "blue" },
-              { label: "Traveler", value: "WO-2035", detail: "Printable output seeded for Phase 1", tone: "slate" },
-              { label: "Materials", value: "Reserved", detail: "AL-6061-PLT-0.375 held", tone: "emerald" },
-              { label: "Customer promise", value: "On track", detail: "Report-ready status summary", tone: "emerald" }
-            ]}
-          />
+      {
+        const job = getJobById("J-2035", jobs);
+        const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
+        const customerSafe = getCustomerSafeJobStatus("J-2035", jobs);
+        const jobAudit = getAuditEventsByEntity("job", "J-2035", auditEvents);
 
-          <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-            <TimelineShell title="Job timeline" subtitle="Operational history that later becomes a live event stream.">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <span>Quoted and approved</span>
-                  <StatusBadge label="Approved" />
-                </div>
-                <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <span>Material reserved</span>
-                  <StatusBadge label="Materials Reserved" />
-                </div>
-                <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <span>Released to floor</span>
-                  <StatusBadge label="In Production" />
-                </div>
-              </div>
-            </TimelineShell>
-
-            <AuditPanel
-              title="Audit trace"
-              subtitle="Seeded changes for the traceability story."
+        return (
+          <>
+            <MetricRow
               items={[
                 {
-                  actor: "Scheduler",
-                  event: "Released job",
-                  time: "10:42 AM",
-                  detail: "J-2035 moved from approved to production.",
-                  severity: "Automation",
-                  entityHref: "/audit/jobs/j-2035",
-                  entityLabel: "Audit"
+                  label: "Current status",
+                  value: job?.status ?? "In Production",
+                  detail: `Customer PO ${job?.customerPo ?? "PO-8841"}`,
+                  tone: "blue"
                 },
                 {
-                  actor: "Purchasing",
-                  event: "Reserved material",
-                  time: "11:15 AM",
-                  detail: "AL-6061 sheet assigned to WO-2035.",
-                  severity: "Info",
-                  entityHref: "/materials/al-6061-plt-0.375",
-                  entityLabel: "Material"
+                  label: "Traveler",
+                  value: job?.workOrder ?? "WO-2035",
+                  detail: "Printable output seeded for Phase 2",
+                  tone: "slate"
+                },
+                {
+                  label: "Materials",
+                  value: "Reserved",
+                  detail: `${material?.sku ?? "AL-6061-PLT-0.375"} held`,
+                  tone: "emerald"
+                },
+                {
+                  label: "Customer promise",
+                  value: customerSafe?.eta ?? "Friday",
+                  detail: customerSafe?.summary ?? "Report-ready status summary",
+                  tone: "emerald"
                 }
               ]}
             />
-          </div>
-        </>
-      );
+
+            <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+              <TimelineShell title="Job timeline" subtitle="Operational history that later becomes a live event stream.">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <span>Customer PO {job?.customerPo ?? "PO-8841"}</span>
+                    <StatusBadge label="Approved" />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <span>Current step: {job?.currentStep ?? "Bend"}</span>
+                    <StatusBadge label="Materials Reserved" />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <span>Work center: {job?.workCenter ?? "Press Brake"}</span>
+                    <StatusBadge label={job?.status ?? "In Production"} />
+                  </div>
+                </div>
+              </TimelineShell>
+
+              <AuditPanel
+                title="Audit trace"
+                subtitle="Seeded changes for the traceability story."
+                items={(jobAudit.length ? jobAudit : getAuditEventsByEntity("job", "J-2035", auditEvents))
+                  .slice(0, 2)
+                  .map((event) => ({
+                    actor: event.actor,
+                    event: event.title,
+                    time: event.timestamp,
+                    detail: event.detail,
+                    severity: event.severity,
+                    entityHref: "/audit/jobs/j-2035",
+                    entityLabel: "Audit"
+                  }))}
+              />
+            </div>
+          </>
+        );
+      }
 
     case "work-order-traveler":
       return (
@@ -411,25 +485,51 @@ function routeBlocks(routeKey: RouteKey) {
       );
 
     case "quality-scrap":
-      return (
-        <>
-          <RiskAlert
-            severity="Critical"
-            title="Scrap approval is required"
-            description="The quality inspector failed the part and needs a controlled approval before the system can close the exception. Later phases will wire actual approval rules."
-            href="/quality/j-2042/rework-created"
-            actionLabel="Open rework"
-          />
-          <MetricRow
-            items={[
-              { label: "Inspection", value: "Failed", detail: "Surface defect detected", tone: "rose" },
-              { label: "Disposition", value: "Scrap", detail: "Awaiting owner approval", tone: "amber" },
-              { label: "Linked job", value: "J-2042", detail: "Traceable to source operation", tone: "blue" },
-              { label: "Material impact", value: "Hold", detail: "Keep stock from shipping", tone: "rose" }
-            ]}
-          />
-        </>
-      );
+      {
+        const job = getJobById("J-2042", jobs);
+        const rework = getReworkOrderById("RW-2042-01", reworkOrders);
+        const scrapRate = job?.scrapRate ?? calculateScrapRate(job?.scrapQuantity ?? 0, job?.completedQuantity ?? 0);
+
+        return (
+          <>
+            <RiskAlert
+              severity="Critical"
+              title="Scrap approval is required"
+              description={`${job?.id ?? "J-2042"} logged ${job?.scrapQuantity ?? 18} scrap units against ${job?.completedQuantity ?? 180} completed units. A controlled approval is required before closure.`}
+              href="/quality/j-2042/rework-created"
+              actionLabel="Open rework"
+            />
+            <MetricRow
+              items={[
+                {
+                  label: "Inspection",
+                  value: "Failed",
+                  detail: `${Math.round(scrapRate * 100)}% scrap rate`,
+                  tone: "rose"
+                },
+                {
+                  label: "Disposition",
+                  value: "Scrap",
+                  detail: `Tolerance ${Math.round((job?.allowedTolerance ?? 0.05) * 100)}%`,
+                  tone: "amber"
+                },
+                {
+                  label: "Linked job",
+                  value: job?.id ?? "J-2042",
+                  detail: job?.currentStep ?? "Weld",
+                  tone: "blue"
+                },
+                {
+                  label: "Material impact",
+                  value: "Hold",
+                  detail: rework?.reason ?? "Keep stock from shipping",
+                  tone: "rose"
+                }
+              ]}
+            />
+          </>
+        );
+      }
 
     case "quality-rework":
       return (
@@ -521,25 +621,51 @@ function routeBlocks(routeKey: RouteKey) {
       );
 
     case "job-2099-material":
-      return (
-        <>
-          <RiskAlert
-            severity="Critical"
-            title="Material shortage threatens release"
-            description="J-2099 cannot proceed without the alloy sheet. The future workflow will convert this into a purchase request and schedule exception."
-            href="/purchase-requests/pr-3091"
-            actionLabel="Review PR"
-          />
-          <MetricRow
-            items={[
-              { label: "Shortage", value: "Active", detail: "No free sheet inventory", tone: "rose" },
-              { label: "Impact", value: "1 job", detail: "J-2099 is blocked", tone: "amber" },
-              { label: "Material", value: "AL-6061-PLT-0.375", detail: "Reserved for priority work", tone: "blue" },
-              { label: "Resolution", value: "PR pending", detail: "Procurement handoff seeded", tone: "emerald" }
-            ]}
-          />
-        </>
-      );
+      {
+        const job = getJobById("J-2099", jobs);
+        const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
+        const pr = getPurchaseRequestById("PR-3091", purchaseRequests);
+
+        return (
+          <>
+            <RiskAlert
+              severity="Critical"
+              title="Material shortage threatens release"
+              description={`${job?.id ?? "J-2099"} cannot proceed without ${material?.sku ?? "AL-6061-PLT-0.375"}. The shortage is ${material?.shortage ?? 44} sheets.`}
+              href="/purchase-requests/pr-3091"
+              actionLabel="Review PR"
+            />
+            <MetricRow
+              items={[
+                {
+                  label: "Shortage",
+                  value: `${material?.shortage ?? 44} sheets`,
+                  detail: "No free sheet inventory",
+                  tone: "rose"
+                },
+                {
+                  label: "Impact",
+                  value: "1 job",
+                  detail: `${job?.id ?? "J-2099"} is blocked`,
+                  tone: "amber"
+                },
+                {
+                  label: "Material",
+                  value: material?.sku ?? "AL-6061-PLT-0.375",
+                  detail: material?.supplier ?? "Reserved for priority work",
+                  tone: "blue"
+                },
+                {
+                  label: "Resolution",
+                  value: pr?.id ?? "PR-3091",
+                  detail: "Procurement handoff seeded",
+                  tone: "emerald"
+                }
+              ]}
+            />
+          </>
+        );
+      }
 
     case "purchase-request":
       return (
@@ -602,34 +728,78 @@ function routeBlocks(routeKey: RouteKey) {
       );
 
     case "quote-1003":
-      return (
-        <>
-          <MetricRow
-            items={[
-              { label: "Status", value: "Needs Owner Approval", detail: "Commercial review pending", tone: "amber" },
-              { label: "Quote ID", value: "Q-1003", detail: "Clickable manufacturing ID", tone: "blue" },
-              { label: "Customer", value: "MetroFab", detail: "Customer-safe details ready", tone: "slate" },
-              { label: "Conversion", value: "Ready", detail: "Next step is a job record", tone: "emerald" }
-            ]}
-          />
-          <TimelineShell title="Approval trail" subtitle="Traceable approval state that later becomes workflow logic.">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                <span>Draft created</span>
-                <StatusBadge label="Draft" />
-              </div>
-              <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                <span>Submitted to owner</span>
-                <StatusBadge label="Submitted" />
-              </div>
-              <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                <span>Waiting for approval</span>
-                <StatusBadge label="Needs Owner Approval" />
-              </div>
+      {
+        const quote = getQuoteById("Q-1003", quotes);
+        const quoteEvents = getAuditEventsByEntity("quote", "Q-1003", auditEvents);
+        const totalCost = (quote?.labor ?? 0) + (quote?.materials ?? 0) + (quote?.outsideServices ?? 0) + (quote?.setupOverhead ?? 0);
+
+        return (
+          <>
+            <MetricRow
+              items={[
+                {
+                  label: "Status",
+                  value: quote?.status ?? "Needs Owner Approval",
+                  detail: `Threshold ${quote?.approvalThreshold?.toLocaleString() ?? "50,000"}`,
+                  tone: "amber"
+                },
+                {
+                  label: "Quote ID",
+                  value: quote?.id ?? "Q-1003",
+                  detail: "Clickable manufacturing ID",
+                  tone: "blue"
+                },
+                {
+                  label: "Customer",
+                  value: quote?.customerName ?? "Northline Fabrication",
+                  detail: `Estimator ${quote?.estimator ?? "Lena Ortiz"}`,
+                  tone: "slate"
+                },
+                {
+                  label: "Margin",
+                  value: `$${quote?.margin.toLocaleString() ?? "6,500"}`,
+                  detail: `Total cost $${totalCost.toLocaleString()}`,
+                  tone: "emerald"
+                }
+              ]}
+            />
+            <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+              <DataTableShell title="Quote breakdown" subtitle="Centralized demo values drive the seeded estimate preview.">
+                <TinyTable
+                  columns={["Component", "Amount", "Signal"]}
+                  rows={[
+                    ["Labor", `$${quote?.labor.toLocaleString() ?? "24,000"}`, <StatusBadge label="Submitted" />],
+                    ["Materials", `$${quote?.materials.toLocaleString() ?? "31,500"}`, <SeverityBadge severity="Approval" />],
+                    ["Outside services", `$${quote?.outsideServices.toLocaleString() ?? "6,000"}`, <SeverityBadge severity="Warning" />],
+                    ["Setup / overhead", `$${quote?.setupOverhead.toLocaleString() ?? "4,500"}`, <SeverityBadge severity="Success" />]
+                  ]}
+                />
+              </DataTableShell>
+
+              <TimelineShell title="Approval trail" subtitle="Traceable approval state that later becomes workflow logic.">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <span>Amount: ${quote?.amount.toLocaleString() ?? "72,500"}</span>
+                    <StatusBadge label={quote?.status ?? "Needs Owner Approval"} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <span>Estimator: {quote?.estimator ?? "Lena Ortiz"}</span>
+                    <StatusBadge label="Submitted" />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <span>Approval role: {quote?.approvalRequiredRole ?? "Owner / GM"}</span>
+                    <SeverityBadge severity="Approval" />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <span>Audit events</span>
+                    <EntityLink href="/audit">{quoteEvents.length} events</EntityLink>
+                  </div>
+                </div>
+              </TimelineShell>
             </div>
-          </TimelineShell>
-        </>
-      );
+          </>
+        );
+      }
 
     case "approvals":
       return (
@@ -764,44 +934,62 @@ function routeBlocks(routeKey: RouteKey) {
       );
 
     case "audit":
-      return (
-        <>
-          <InternalViewLabel />
-          <AuditPanel
-            title="Full traceability"
-            subtitle="Everything in Phase 1 points to this seeded audit rail."
-            items={[
-              {
-                actor: "Scheduler",
-                event: "Released J-2035",
-                time: "10:42 AM",
-                detail: "Job moved into production with all related links preserved.",
-                severity: "Automation",
-                entityHref: "/jobs/j-2035",
-                entityLabel: "Job J-2035"
-              },
-              {
-                actor: "Quality Inspector",
-                event: "Created rework",
-                time: "1:04 PM",
-                detail: "Rework record generated after failed inspection.",
-                severity: "Approval",
-                entityHref: "/quality/j-2042/rework-created",
-                entityLabel: "RW-2042-01"
-              },
-              {
-                actor: "Purchasing",
-                event: "Raised PR-3091",
-                time: "2:18 PM",
-                detail: "Material shortage flow created a purchase request.",
-                severity: "Info",
-                entityHref: "/purchase-requests/pr-3091",
-                entityLabel: "PR-3091"
-              }
-            ]}
-          />
-        </>
-      );
+      {
+        const severityCounts = auditEvents.reduce<Record<string, number>>((counts, event) => {
+          counts[event.severity] = (counts[event.severity] ?? 0) + 1;
+          return counts;
+        }, {});
+
+        return (
+          <>
+            <InternalViewLabel />
+            <MetricRow
+              items={[
+                { label: "Events", value: `${auditEvents.length}`, detail: "Founder trail seeded", tone: "blue" },
+                { label: "Approvals", value: `${severityCounts.Approval ?? 0}`, detail: "Decision points captured", tone: "amber" },
+                { label: "Critical", value: `${severityCounts.Critical ?? 0}`, detail: "Escalations and blockers", tone: "rose" },
+                { label: "Traceability", value: "Full", detail: "Jobs, quotes, quality, and purchasing", tone: "emerald" }
+              ]}
+            />
+            <AuditPanel
+              title="Full traceability"
+              subtitle="Everything in Phase 1 points to this seeded audit rail."
+              items={auditEvents.slice(0, 8).map((event) => {
+                const entityHref =
+                  event.entityType === "quote"
+                    ? "/quotes/q-1003"
+                    : event.entityType === "job"
+                      ? event.entityId === "J-2104"
+                        ? "/quotes/q-1003"
+                        : "/jobs/j-2035"
+                      : event.entityType === "workOrder"
+                        ? event.entityId === "WO-2035"
+                          ? "/output/work-order-traveler/j-2035"
+                          : "/quotes/q-1003"
+                        : event.entityType === "material"
+                          ? "/jobs/j-2099/material-impact"
+                          : event.entityType === "purchaseRequest"
+                            ? "/purchase-requests/pr-3091"
+                            : event.entityType === "report"
+                              ? "/reports/customer-status/j-2035"
+                              : event.entityType === "quality"
+                                ? "/quality/j-2042/scrap-approval"
+                                : "/capacity";
+
+                return {
+                  actor: event.actor,
+                  event: event.title,
+                  time: event.timestamp,
+                  detail: event.detail,
+                  severity: event.severity,
+                  entityHref,
+                  entityLabel: event.entityId
+                };
+              })}
+            />
+          </>
+        );
+      }
 
     case "audit-job":
       return (
@@ -832,59 +1020,83 @@ function routeBlocks(routeKey: RouteKey) {
       );
 
     case "demo-summary":
-      return (
-        <div className="space-y-4">
-          <MetricRow
-            items={[
-              { label: "Shell status", value: "Phase 1", detail: "App scaffold and demo routes", tone: "blue" },
-              { label: "Roles", value: "8", detail: "Client-side switcher wired", tone: "emerald" },
-              { label: "Steps", value: "13", detail: "Demo path configured", tone: "amber" },
-              { label: "Routes", value: "24+", detail: "Placeholder screens covered", tone: "slate" }
-            ]}
-          />
+      {
+        const summary = getCapacitySummary(workCenters);
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <DataTableShell title="Status badges" subtitle="Centralized style map for all major states.">
-              <div className="grid gap-3 p-4 md:grid-cols-2">
-                {Object.entries(allStatusGroups).map(([group, statuses]) => (
-                  <div key={group} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      {group}
+        return (
+          <div className="space-y-4">
+            <MetricRow
+              items={[
+                {
+                  label: "Shell status",
+                  value: "Phase 2 seed",
+                  detail: "Centralized data layer wired",
+                  tone: "blue"
+                },
+                {
+                  label: "Customers",
+                  value: `${customers.length}`,
+                  detail: "Seeded customer accounts",
+                  tone: "emerald"
+                },
+                {
+                  label: "Steps",
+                  value: "13",
+                  detail: "Founder demo path preserved",
+                  tone: "amber"
+                },
+                {
+                  label: "Bottleneck",
+                  value: summary.bottleneckLabel,
+                  detail: `${summary.utilization}% load`,
+                  tone: "slate"
+                }
+              ]}
+            />
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <DataTableShell title="Status badges" subtitle="Centralized style map for all major states.">
+                <div className="grid gap-3 p-4 md:grid-cols-2">
+                  {Object.entries(allStatusGroups).map(([group, statuses]) => (
+                    <div key={group} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                        {group}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {statuses.map((status) => (
+                          <StatusBadge key={status} label={status} />
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {statuses.map((status) => (
-                        <StatusBadge key={status} label={status} />
-                      ))}
-                    </div>
+                  ))}
+                </div>
+              </DataTableShell>
+
+              <TimelineShell title="Shared component showcase" subtitle="Everything that Phase 1 exposes as reusable UI.">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <EntityLink href="/jobs/j-2035">J-2035</EntityLink>
+                    <EntityLink href="/quotes/q-1003">Q-1003</EntityLink>
+                    <EntityLink href="/purchase-requests/pr-3091">PR-3091</EntityLink>
                   </div>
-                ))}
-              </div>
-            </DataTableShell>
-
-            <TimelineShell title="Shared component showcase" subtitle="Everything that Phase 1 exposes as reusable UI.">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <EntityLink href="/jobs/j-2035">J-2035</EntityLink>
-                  <EntityLink href="/quotes/q-1003">Q-1003</EntityLink>
-                  <EntityLink href="/purchase-requests/pr-3091">PR-3091</EntityLink>
+                  <div className="flex flex-wrap gap-2">
+                    <SeverityBadge severity="Info" />
+                    <SeverityBadge severity="Warning" />
+                    <SeverityBadge severity="Critical" />
+                    <SeverityBadge severity="Blocked" />
+                    <SeverityBadge severity="Approval" />
+                    <SeverityBadge severity="Automation" />
+                    <SeverityBadge severity="Success" />
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                    Centralized demo records now drive the preview routes and future phase workflows.
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <SeverityBadge severity="Info" />
-                  <SeverityBadge severity="Warning" />
-                  <SeverityBadge severity="Critical" />
-                  <SeverityBadge severity="Blocked" />
-                  <SeverityBadge severity="Approval" />
-                  <SeverityBadge severity="Automation" />
-                  <SeverityBadge severity="Success" />
-                </div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                  Internal-only notes and permissions gates can be layered on in later phases.
-                </div>
-              </div>
-            </TimelineShell>
+              </TimelineShell>
+            </div>
           </div>
-        </div>
-      );
+        );
+      }
 
     default:
       return null;
