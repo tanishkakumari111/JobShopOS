@@ -121,7 +121,7 @@ function PageHeader({
             className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-text transition hover:border-accent/30 hover:text-accent"
           >
             <Plus className="h-4 w-4" />
-            Placeholder
+            Secondary action
           </button>
           <button
             type="button"

@@ -744,6 +744,7 @@ export function getAuditTimelineRows(events: AuditEvent[] = auditEvents): AuditT
     "RW-2042-01": "/quality/j-2042/rework-created",
     "PR-3091": "/purchase-requests/pr-3091",
     "AL-6061-PLT-0.375": "/materials/al-6061-plt-0.375",
+    PressBrake: "/capacity",
     "RPT-J-2035-CUSTOMER": "/reports/customer-status/j-2035"
   };
 
