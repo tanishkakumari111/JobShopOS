@@ -184,6 +184,116 @@ export type Quote = {
   materials: number;
   outsideServices: number;
   setupOverhead: number;
+  customerReference?: string;
+  revision?: string;
+  validUntil?: string;
+  lastUpdated?: string;
+  expiresSoon?: boolean;
+  customerFacingNotes?: string;
+  internalNotes?: string;
+};
+
+export type QuoteDashboardRow = {
+  quoteId: string;
+  customerName: string;
+  part: string;
+  amount: number;
+  margin: number;
+  status: Quote["status"] | "Expiring Soon";
+  validUntil: string;
+  estimator: string;
+  approvalRequirement: string;
+  lastUpdated: string;
+  action: string;
+  href?: string;
+  highlight?: boolean;
+};
+
+export type QuoteSummary = {
+  draftQuotes: number;
+  submittedQuotes: number;
+  awaitingOwnerApproval: number;
+  approvedThisMonth: number;
+  convertedToJobs: number;
+  expiringSoon: number;
+  totalQuotedValue: number;
+};
+
+export type QuoteApprovalQueueRow = {
+  quoteId: string;
+  customerName: string;
+  amount: number;
+  margin: number;
+  estimator: string;
+  validUntil: string;
+  risk: "Low" | "Medium" | "High";
+  reasonApprovalRequired: string;
+  action: string;
+  href: string;
+  highlight?: boolean;
+};
+
+export type QuoteRoutingEstimateRow = {
+  operation: string;
+  workCenter: string;
+  estimatedHours: number;
+  machine: string;
+  notes: string;
+};
+
+export type QuoteMaterialEstimateRow = {
+  sku: string;
+  materialName: string;
+  quantity: string;
+  unitCost: number;
+  extendedCost: number;
+  availabilityStatus: string;
+};
+
+export type QuoteApprovalHistoryEntry = {
+  timestamp: string;
+  title: string;
+  detail: string;
+};
+
+export type QuoteConversionRecord = {
+  quoteId: string;
+  customerName: string;
+  jobNumber: string;
+  workOrder: string;
+  routingTemplate: string;
+  initialMaterialReservation: string;
+  scheduler: string;
+  supervisor: string;
+  generatedRouting: string[];
+  createdRecords: string[];
+  updatedQuoteStatus: string;
+};
+
+export type QuoteFormSnapshot = {
+  customer: string;
+  quoteCode: string;
+  customerReference: string;
+  partName: string;
+  partRevision: string;
+  quantity: number;
+  requestedDueDate: string;
+  validUntil: string;
+  estimator: string;
+  estimatedLaborHours: number;
+  laborRate: number;
+  materialCost: number;
+  outsideServiceCost: number;
+  setupCost: number;
+  overhead: number;
+  marginPercentage: number;
+  totalQuoteAmount: number;
+  routingEstimate: QuoteRoutingEstimateRow[];
+  materialEstimate: QuoteMaterialEstimateRow[];
+  customerFacingNotes: string;
+  internalNotes: string;
+  terms: string;
+  validationExamples: string[];
 };
 
 export type Material = {

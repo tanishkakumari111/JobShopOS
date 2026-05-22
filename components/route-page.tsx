@@ -41,6 +41,9 @@ import {
   getPurchaseRequestState,
   getPurchaseRequestAuditEntries,
   getQuoteById,
+  getQuoteSummary,
+  getQuoteRows,
+  getApprovalQueueRows,
   getProductionQueue,
   getQualitySummary,
   getInspectionQueue,
@@ -53,6 +56,11 @@ import {
   j2042QualityTimeline,
   j2042ScrapEventDetail,
   materialImpactTimeline,
+  quoteRoutingEstimateRows,
+  quoteMaterialEstimateRows,
+  q1003ApprovalHistory,
+  q1003QuoteForm,
+  q1003ConversionRecord,
   j2035ProductionUpdates,
   j2035QualityInspectionChecks,
   j2035QualityReadiness,
@@ -2069,107 +2077,119 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "quotes":
-      return (
-        <DataTableShell title="Quote pipeline" subtitle="Drafts, approvals, and conversions in one place.">
-          <TinyTable
-            columns={["Quote", "Customer", "Status", "Expected margin"]}
-            rows={[
-              [
-                <EntityLink href="/quotes/q-1003">Q-1003</EntityLink>,
-                "MetroFab",
-                <StatusBadge label="Needs Owner Approval" />,
-                "31%"
-              ],
-              ["Q-1002", "Northline", <StatusBadge label="Draft" />, "28%"]
-            ]}
-          />
-        </DataTableShell>
-      );
-
-    case "quote-new":
-      return (
-        <DataTableShell title="New quote" subtitle="Placeholder intake form for the estimate workflow.">
-          <div className="grid gap-3 p-4 md:grid-cols-2">
-            {["Customer", "Part", "Quantity", "Due date"].map((field) => (
-              <label key={field} className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  {field}
-                </span>
-                <div className="h-11 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
-                  Seed placeholder
-                </div>
-              </label>
-            ))}
-          </div>
-        </DataTableShell>
-      );
-
-    case "quote-1003":
       {
-        const quote = getQuoteById("Q-1003", quotes);
-        const quoteEvents = getAuditEventsByEntity("quote", "Q-1003", auditEvents);
-        const totalCost = (quote?.labor ?? 0) + (quote?.materials ?? 0) + (quote?.outsideServices ?? 0) + (quote?.setupOverhead ?? 0);
+        const summary = getQuoteSummary(quotes, jobs);
+        const quoteRows = getQuoteRows(quotes);
+        const filterChips = ["All", "Draft", "Submitted", "Needs Owner Approval", "Approved", "Expiring Soon"];
 
         return (
           <>
             <MetricRow
               items={[
-                {
-                  label: "Status",
-                  value: quote?.status ?? "Needs Owner Approval",
-                  detail: `Threshold ${quote?.approvalThreshold?.toLocaleString() ?? "50,000"}`,
-                  tone: "amber"
-                },
-                {
-                  label: "Quote ID",
-                  value: quote?.id ?? "Q-1003",
-                  detail: "Clickable manufacturing ID",
-                  tone: "blue"
-                },
-                {
-                  label: "Customer",
-                  value: quote?.customerName ?? "Northline Fabrication",
-                  detail: `Estimator ${quote?.estimator ?? "Lena Ortiz"}`,
-                  tone: "slate"
-                },
-                {
-                  label: "Margin",
-                  value: `$${quote?.margin.toLocaleString() ?? "6,500"}`,
-                  detail: `Total cost $${totalCost.toLocaleString()}`,
-                  tone: "emerald"
-                }
+                { label: "Draft quotes", value: `${summary.draftQuotes}`, detail: "Estimates still in progress", tone: "slate" },
+                { label: "Submitted quotes", value: `${summary.submittedQuotes}`, detail: "Ready for review", tone: "blue" },
+                { label: "Awaiting owner approval", value: `${summary.awaitingOwnerApproval}`, detail: "Blocked by threshold", tone: "amber" },
+                { label: "Approved this month", value: `${summary.approvedThisMonth}`, detail: "Leadership cleared", tone: "emerald" },
+                { label: "Converted to jobs", value: `${summary.convertedToJobs}`, detail: "Jobs created from quotes", tone: "emerald" },
+                { label: "Expiring soon", value: `${summary.expiringSoon}`, detail: "Quotes needing follow-up", tone: "amber" },
+                { label: "Total quoted value", value: `$${summary.totalQuotedValue.toLocaleString()}`, detail: "Current pipeline value", tone: "rose" }
               ]}
             />
-            <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-              <DataTableShell title="Quote breakdown" subtitle="Centralized demo values drive the seeded estimate preview.">
-                <TinyTable
-                  columns={["Component", "Amount", "Signal"]}
-                  rows={[
-                    ["Labor", `$${quote?.labor.toLocaleString() ?? "24,000"}`, <StatusBadge label="Submitted" />],
-                    ["Materials", `$${quote?.materials.toLocaleString() ?? "31,500"}`, <SeverityBadge severity="Approval" />],
-                    ["Outside services", `$${quote?.outsideServices.toLocaleString() ?? "6,000"}`, <SeverityBadge severity="Warning" />],
-                    ["Setup / overhead", `$${quote?.setupOverhead.toLocaleString() ?? "4,500"}`, <SeverityBadge severity="Success" />]
-                  ]}
-                />
+
+            <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+              <DataTableShell
+                title="Quote table"
+                subtitle="Dashboard rows stay seeded until the estimate workflow is built."
+                actions={
+                  <div className="flex flex-wrap items-center gap-2">
+                    {filterChips.map((chip, index) => (
+                      <span
+                        key={chip}
+                        className={cn(
+                          "rounded-sm border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]",
+                          index === 0 ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-slate-50 text-slate-600"
+                        )}
+                      >
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+                }
+              >
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                    <tr>
+                      <th className="px-4 py-2.5 font-semibold">Quote code</th>
+                      <th className="px-4 py-2.5 font-semibold">Customer</th>
+                      <th className="px-4 py-2.5 font-semibold">Part / description</th>
+                      <th className="px-4 py-2.5 font-semibold">Amount</th>
+                      <th className="px-4 py-2.5 font-semibold">Margin</th>
+                      <th className="px-4 py-2.5 font-semibold">Status</th>
+                      <th className="px-4 py-2.5 font-semibold">Valid until</th>
+                      <th className="px-4 py-2.5 font-semibold">Estimator</th>
+                      <th className="px-4 py-2.5 font-semibold">Approval requirement</th>
+                      <th className="px-4 py-2.5 font-semibold">Last updated</th>
+                      <th className="px-4 py-2.5 font-semibold">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {quoteRows.map((row) => (
+                      <tr key={row.quoteId} className={cn("align-top", row.highlight ? "bg-amber-50/70" : "bg-white")}>
+                        <td className="px-4 py-3">
+                          <EntityLink href={row.href ?? "/quotes"}>{row.quoteId}</EntityLink>
+                        </td>
+                        <td className="px-4 py-3">{row.customerName}</td>
+                        <td className="px-4 py-3">{row.part}</td>
+                        <td className="px-4 py-3 font-mono text-[13px] text-slate-900">${row.amount.toLocaleString()}</td>
+                        <td className="px-4 py-3 font-mono text-[13px] text-slate-900">${row.margin.toLocaleString()}</td>
+                        <td className="px-4 py-3">
+                          <StatusBadge label={row.status} />
+                        </td>
+                        <td className="px-4 py-3">{row.validUntil}</td>
+                        <td className="px-4 py-3">{row.estimator}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <SeverityBadge severity={row.highlight ? "Approval" : "Info"} />
+                            <span className="text-sm text-slate-600">{row.approvalRequirement}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">{row.lastUpdated}</td>
+                        <td className="px-4 py-3">
+                          {row.href ? (
+                            <Link
+                              href={row.href}
+                              className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800"
+                            >
+                              {row.action}
+                            </Link>
+                          ) : (
+                            <span className="inline-flex rounded-sm border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
+                              {row.action}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </DataTableShell>
 
-              <TimelineShell title="Approval trail" subtitle="Traceable approval state that later becomes workflow logic.">
+              <TimelineShell title="Founder demo path" subtitle="Step 9: Quote Approval - Q-1003">
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <span>Amount: ${quote?.amount.toLocaleString() ?? "72,500"}</span>
-                    <StatusBadge label={quote?.status ?? "Needs Owner Approval"} />
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <span>Estimator: {quote?.estimator ?? "Lena Ortiz"}</span>
-                    <StatusBadge label="Submitted" />
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <span>Approval role: {quote?.approvalRequiredRole ?? "Owner / GM"}</span>
-                    <SeverityBadge severity="Approval" />
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <span>Audit events</span>
-                    <EntityLink href="/audit">{quoteEvents.length} events</EntityLink>
+                  <RiskAlert
+                    severity="Approval"
+                    title="Next: Owner Approval - Q-1003"
+                    description="High-value work stops at the threshold until the owner reviews margin, timing, and risk."
+                    href="/approvals"
+                    actionLabel="Open approval queue"
+                  />
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Demo path cue
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      The dashboard points directly into the approval flow so the demo can move from estimate to governed release.
+                    </p>
                   </div>
                 </div>
               </TimelineShell>
@@ -2178,39 +2198,665 @@ function routeBlocks(routeKey: RouteKey) {
         );
       }
 
+    case "quote-new":
+      {
+        const routingHours = q1003QuoteForm.routingEstimate.reduce((sum, step) => sum + step.estimatedHours, 0);
+        const totalMaterials = q1003QuoteForm.materialEstimate.reduce((sum, material) => sum + material.extendedCost, 0);
+
+        return (
+          <div className="space-y-4">
+            <MetricRow
+              items={[
+                { label: "Quote code", value: q1003QuoteForm.quoteCode, detail: "Unique estimate identifier", tone: "blue" },
+                { label: "Customer", value: q1003QuoteForm.customer, detail: q1003QuoteForm.customerReference, tone: "emerald" },
+                { label: "Total quote amount", value: `$${q1003QuoteForm.totalQuoteAmount.toLocaleString()}`, detail: "Seeded estimate result", tone: "rose" },
+                { label: "Routing hours", value: `${routingHours}h`, detail: "Estimated labor load", tone: "amber" }
+              ]}
+            />
+
+            <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+              <div className="space-y-4">
+                <DataTableShell title="Customer and quote details" subtitle="Estimator-focused layout with seeded validation states.">
+                  <div className="grid gap-3 p-4 md:grid-cols-2">
+                    {[
+                      ["Customer", q1003QuoteForm.customer],
+                      ["Quote code", q1003QuoteForm.quoteCode],
+                      ["Customer PO / RFQ reference", q1003QuoteForm.customerReference],
+                      ["Part name", q1003QuoteForm.partName],
+                      ["Part revision", q1003QuoteForm.partRevision],
+                      ["Quantity", `${q1003QuoteForm.quantity}`],
+                      ["Requested due date", q1003QuoteForm.requestedDueDate],
+                      ["Valid until", q1003QuoteForm.validUntil],
+                      ["Estimator", q1003QuoteForm.estimator]
+                    ].map(([label, value]) => (
+                      <label key={label} className="space-y-1">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</span>
+                        <div className="min-h-11 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                          {value}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </DataTableShell>
+
+                <DataTableShell title="Cost build-up" subtitle="No submission yet - this is the estimator preview.">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                      <tr>
+                        <th className="px-4 py-2.5 font-semibold">Component</th>
+                        <th className="px-4 py-2.5 font-semibold">Amount</th>
+                        <th className="px-4 py-2.5 font-semibold">Signal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {[
+                        ["Estimated labor hours", `${q1003QuoteForm.estimatedLaborHours}h`, "Info"],
+                        ["Labor rate", `$${q1003QuoteForm.laborRate}`, "Info"],
+                        ["Material cost", `$${q1003QuoteForm.materialCost.toLocaleString()}`, "Warning"],
+                        ["Outside service cost", `$${q1003QuoteForm.outsideServiceCost.toLocaleString()}`, "Warning"],
+                        ["Setup cost", `$${q1003QuoteForm.setupCost.toLocaleString()}`, "Info"],
+                        ["Overhead", `$${q1003QuoteForm.overhead.toLocaleString()}`, "Info"],
+                        ["Margin percentage", `${q1003QuoteForm.marginPercentage}%`, "Success"],
+                        ["Total quote amount", `$${q1003QuoteForm.totalQuoteAmount.toLocaleString()}`, "Critical"]
+                      ].map(([label, amount, severity]) => (
+                        <tr key={label}>
+                          <td className="px-4 py-3">{label}</td>
+                          <td className="px-4 py-3 font-mono text-[13px]">{amount}</td>
+                          <td className="px-4 py-3">
+                            <SeverityBadge severity={severity as "Info" | "Warning" | "Critical" | "Blocked" | "Approval" | "Automation" | "Success"} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </DataTableShell>
+
+                <DataTableShell title="Routing estimate" subtitle="Cut, bend, weld, finish, inspect, and pack are defined before submit.">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                      <tr>
+                        <th className="px-4 py-2.5 font-semibold">Operation</th>
+                        <th className="px-4 py-2.5 font-semibold">Work center</th>
+                        <th className="px-4 py-2.5 font-semibold">Estimated hours</th>
+                        <th className="px-4 py-2.5 font-semibold">Machine</th>
+                        <th className="px-4 py-2.5 font-semibold">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {q1003QuoteForm.routingEstimate.map((step) => (
+                        <tr key={step.operation}>
+                          <td className="px-4 py-3 font-medium text-slate-950">{step.operation}</td>
+                          <td className="px-4 py-3">{step.workCenter}</td>
+                          <td className="px-4 py-3 font-mono text-[13px]">{step.estimatedHours}h</td>
+                          <td className="px-4 py-3 font-mono text-[13px]">{step.machine}</td>
+                          <td className="px-4 py-3 text-slate-600">{step.notes}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </DataTableShell>
+
+                <DataTableShell title="Materials estimate" subtitle="Seeded material rows show where availability and shortage matter.">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                      <tr>
+                        <th className="px-4 py-2.5 font-semibold">SKU</th>
+                        <th className="px-4 py-2.5 font-semibold">Material name</th>
+                        <th className="px-4 py-2.5 font-semibold">Quantity</th>
+                        <th className="px-4 py-2.5 font-semibold">Unit cost</th>
+                        <th className="px-4 py-2.5 font-semibold">Extended cost</th>
+                        <th className="px-4 py-2.5 font-semibold">Availability status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {q1003QuoteForm.materialEstimate.map((material) => (
+                        <tr key={material.sku}>
+                          <td className="px-4 py-3 font-mono text-[13px]">{material.sku}</td>
+                          <td className="px-4 py-3">{material.materialName}</td>
+                          <td className="px-4 py-3">{material.quantity}</td>
+                          <td className="px-4 py-3 font-mono text-[13px]">${material.unitCost}</td>
+                          <td className="px-4 py-3 font-mono text-[13px]">${material.extendedCost.toLocaleString()}</td>
+                          <td className="px-4 py-3">
+                            <StatusBadge label={material.availabilityStatus} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </DataTableShell>
+              </div>
+
+              <div className="space-y-4">
+                <TimelineShell title="Validation and assumptions" subtitle="Static validation states show how the form will behave later.">
+                  <div className="space-y-3">
+                    {q1003QuoteForm.validationExamples.map((example) => (
+                      <div key={example} className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                        {example}
+                      </div>
+                    ))}
+                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+                      <div className="font-semibold text-slate-950">Notes and assumptions</div>
+                      <p className="mt-2">Internal notes: {q1003QuoteForm.internalNotes}</p>
+                      <p className="mt-2">Customer-facing notes: {q1003QuoteForm.customerFacingNotes}</p>
+                      <p className="mt-2">Terms: {q1003QuoteForm.terms}</p>
+                    </div>
+                  </div>
+                </TimelineShell>
+
+                <TimelineShell title="Estimate snapshot" subtitle="Useful for estimating the eventual quote total.">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <MetricCard label="Materials total" value={`$${totalMaterials.toLocaleString()}`} detail="Seeded material estimate" tone="amber" />
+                    <MetricCard label="Routing hours" value={`${routingHours}h`} detail="Seeded routing estimate" tone="blue" />
+                    <MetricCard label="Margin" value={`${q1003QuoteForm.marginPercentage}%`} detail="Targeted quote margin" tone="emerald" />
+                    <MetricCard label="Quote amount" value={`$${q1003QuoteForm.totalQuoteAmount.toLocaleString()}`} detail="Validation example" tone="rose" />
+                  </div>
+                </TimelineShell>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                  >
+                    Save draft
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                  >
+                    Submit quote
+                  </button>
+                  <Link
+                    href="/quotes"
+                    className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                  >
+                    Cancel
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+    case "quote-1003":
+      {
+        const quote = getQuoteById("Q-1003", quotes);
+        const quoteEvents = getAuditEventsByEntity("quote", "Q-1003", auditEvents);
+        const totalCost = (quote?.labor ?? 0) + (quote?.materials ?? 0) + (quote?.outsideServices ?? 0) + (quote?.setupOverhead ?? 0);
+
+        return (
+          <div className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <EntityLink href="/quotes/q-1003">Q-1003</EntityLink>
+                    <StatusBadge label={quote?.status ?? "Needs Owner Approval"} />
+                    <SeverityBadge severity="Approval" />
+                  </div>
+                  <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Quote Detail - Q-1003</h1>
+                  <p className="max-w-4xl text-sm leading-6 text-slate-500">
+                    High-value quote for Northline Fabrication. Owner approval is required before conversion.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled
+                    title="Owner approval required before conversion."
+                    className="inline-flex cursor-not-allowed items-center gap-2 rounded-sm border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-medium text-slate-400"
+                  >
+                    Convert to Job
+                  </button>
+                  <Link
+                    href="/approvals"
+                    className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                  >
+                    Open Owner Approval Queue
+                  </Link>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <MetricCard label="Customer" value={quote?.customerName ?? "Northline Fabrication"} detail="Estimator Lena Ortiz" tone="blue" />
+                <MetricCard label="Amount" value={`$${quote?.amount.toLocaleString() ?? "72,500"}`} detail="Threshold $50,000" tone="rose" />
+                <MetricCard label="Valid until" value={quote?.validUntil ?? "21 days from now"} detail="Quote expiration window" tone="amber" />
+                <MetricCard label="Margin" value={`$${quote?.margin.toLocaleString() ?? "6,500"}`} detail={`Total cost $${totalCost.toLocaleString()}`} tone="emerald" />
+              </div>
+            </div>
+
+            <RiskAlert
+              severity="Approval"
+              title="This quote exceeds the $50,000 approval threshold."
+              description="Owner / GM approval is required before it can be converted into a production job."
+              href="/approvals"
+              actionLabel="Open approval queue"
+            />
+
+            <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+              <div className="space-y-4">
+                <DataTableShell title="Cost breakdown" subtitle="Centralized quote economics for Q-1003.">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                      <tr>
+                        <th className="px-4 py-2.5 font-semibold">Component</th>
+                        <th className="px-4 py-2.5 font-semibold">Amount</th>
+                        <th className="px-4 py-2.5 font-semibold">Signal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {[
+                        ["Labor", quote?.labor ?? 24000, "Submitted"],
+                        ["Materials", quote?.materials ?? 31500, "Approval"],
+                        ["Outside services", quote?.outsideServices ?? 6000, "Warning"],
+                        ["Setup / overhead", quote?.setupOverhead ?? 4500, "Success"],
+                        ["Margin", quote?.margin ?? 6500, "Approval"],
+                        ["Total", quote?.amount ?? 72500, "Critical"]
+                      ].map(([label, amount, severity]) => (
+                        <tr key={label}>
+                          <td className="px-4 py-3 font-medium text-slate-950">{label}</td>
+                          <td className="px-4 py-3 font-mono text-[13px]">${Number(amount).toLocaleString()}</td>
+                          <td className="px-4 py-3">
+                            <SeverityBadge severity={severity as "Info" | "Warning" | "Critical" | "Blocked" | "Approval" | "Automation" | "Success"} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </DataTableShell>
+
+                <DataTableShell title="Routing estimate" subtitle="Production routing carries forward once the quote is approved.">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                      <tr>
+                        <th className="px-4 py-2.5 font-semibold">Operation</th>
+                        <th className="px-4 py-2.5 font-semibold">Work center</th>
+                        <th className="px-4 py-2.5 font-semibold">Estimated hours</th>
+                        <th className="px-4 py-2.5 font-semibold">Machine</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {quoteRoutingEstimateRows.map((step) => (
+                        <tr key={step.operation}>
+                          <td className="px-4 py-3">{step.operation}</td>
+                          <td className="px-4 py-3">{step.workCenter}</td>
+                          <td className="px-4 py-3 font-mono text-[13px]">{step.estimatedHours}h</td>
+                          <td className="px-4 py-3 font-mono text-[13px]">{step.machine}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </DataTableShell>
+
+                <DataTableShell title="Material estimate" subtitle="Availability and shortage are visible before conversion.">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                      <tr>
+                        <th className="px-4 py-2.5 font-semibold">SKU</th>
+                        <th className="px-4 py-2.5 font-semibold">Material</th>
+                        <th className="px-4 py-2.5 font-semibold">Qty</th>
+                        <th className="px-4 py-2.5 font-semibold">Unit cost</th>
+                        <th className="px-4 py-2.5 font-semibold">Extended</th>
+                        <th className="px-4 py-2.5 font-semibold">Availability</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {quoteMaterialEstimateRows.map((material) => (
+                        <tr key={material.sku}>
+                          <td className="px-4 py-3 font-mono text-[13px]">{material.sku}</td>
+                          <td className="px-4 py-3">{material.materialName}</td>
+                          <td className="px-4 py-3">{material.quantity}</td>
+                          <td className="px-4 py-3 font-mono text-[13px]">${material.unitCost}</td>
+                          <td className="px-4 py-3 font-mono text-[13px]">${material.extendedCost.toLocaleString()}</td>
+                          <td className="px-4 py-3">
+                            <StatusBadge label={material.availabilityStatus} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </DataTableShell>
+              </div>
+
+              <div className="space-y-4">
+                <TimelineShell title="Quote summary" subtitle="The seeded quote carries all the important commercial detail.">
+                  <div className="space-y-3">
+                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Approval requirement</div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <StatusBadge label={quote?.status ?? "Needs Owner Approval"} />
+                        <SeverityBadge severity="Approval" />
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {quote?.approvalRequiredRole ?? "Owner / GM"} required before production conversion.
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-white p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Margin summary</div>
+                      <div className="mt-2 grid gap-2 text-sm text-slate-700">
+                        <div className="flex items-center justify-between">
+                          <span>Margin</span>
+                          <span className="font-mono text-[13px]">${quote?.margin.toLocaleString() ?? "6,500"}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Total cost</span>
+                          <span className="font-mono text-[13px]">${totalCost.toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Threshold</span>
+                          <span className="font-mono text-[13px]">${quote?.approvalThreshold.toLocaleString() ?? "50,000"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </TimelineShell>
+
+                <TimelineShell title="Notes and approval history" subtitle="What the estimator captured and what leadership needs to know.">
+                  <div className="space-y-3">
+                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer-facing notes</div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {quote?.customerFacingNotes ?? "Customer-facing notes will be shown here."}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Internal notes</div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {quote?.internalNotes ?? "Internal notes will be shown here."}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {q1003ApprovalHistory.map((entry) => (
+                        <div key={entry.timestamp + entry.title} className="rounded-md border border-slate-200 bg-white p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm font-semibold text-slate-950">{entry.title}</div>
+                            <span className="text-xs text-slate-500">{entry.timestamp}</span>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-slate-600">{entry.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </TimelineShell>
+
+                <AuditPanel
+                  title="Audit events"
+                  subtitle="The approval trail is already recorded in the seeded audit stream."
+                  items={quoteEvents.map((event) => ({
+                    actor: event.actor,
+                    actorRole: event.actorRole,
+                    event: event.title,
+                    time: event.timestamp,
+                    detail: event.detail,
+                    severity: event.severity,
+                    entityHref: "/quotes/q-1003",
+                    entityLabel: event.entityId
+                  }))}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      }
+
     case "approvals":
-      return (
-        <DataTableShell title="Approval queue" subtitle="Owner and supervisor approvals will live here.">
-          <TinyTable
-            columns={["Item", "Requester", "Reason", "Status"]}
-            rows={[
-              ["Q-1003", "Estimator", "Margin review", <StatusBadge label="Needs Owner Approval" />],
-              ["J-2042", "Quality", "Scrap disposition", <StatusBadge label="Scrap Approval Required" />]
-            ]}
-          />
-        </DataTableShell>
-      );
+      {
+        const approvalRows = getApprovalQueueRows(quotes);
+        const pendingValue = approvalRows.reduce((sum, row) => sum + row.amount, 0);
+
+        return (
+          <div className="space-y-4">
+            <MetricRow
+              items={[
+                { label: "Quotes awaiting approval", value: `${approvalRows.length}`, detail: "Owner / GM queue", tone: "amber" },
+                { label: "Total value pending approval", value: `$${pendingValue.toLocaleString()}`, detail: "High-value opportunities", tone: "rose" },
+                { label: "Oldest pending approval", value: approvalRows[0]?.validUntil ?? "21 days", detail: "Q-1003 is first in line", tone: "blue" },
+                { label: "High-margin opportunities", value: `${approvalRows.filter((row) => row.margin >= 6000).length}`, detail: "Leadership review worthy", tone: "emerald" },
+                { label: "Expiring soon", value: `${quotes.filter((quote) => quote.expiresSoon).length}`, detail: "Requires quick turnaround", tone: "amber" }
+              ]}
+            />
+
+            <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+              <DataTableShell title="Approval table" subtitle="Owner / GM reviews high-value estimates here.">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                    <tr>
+                      <th className="px-4 py-2.5 font-semibold">Quote</th>
+                      <th className="px-4 py-2.5 font-semibold">Customer</th>
+                      <th className="px-4 py-2.5 font-semibold">Amount</th>
+                      <th className="px-4 py-2.5 font-semibold">Margin</th>
+                      <th className="px-4 py-2.5 font-semibold">Estimator</th>
+                      <th className="px-4 py-2.5 font-semibold">Valid until</th>
+                      <th className="px-4 py-2.5 font-semibold">Risk</th>
+                      <th className="px-4 py-2.5 font-semibold">Reason approval required</th>
+                      <th className="px-4 py-2.5 font-semibold">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {approvalRows.map((row) => (
+                      <tr key={row.quoteId} className={cn(row.highlight ? "bg-amber-50/70" : "bg-white")}>
+                        <td className="px-4 py-3">
+                          <EntityLink href={row.href}>{row.quoteId}</EntityLink>
+                        </td>
+                        <td className="px-4 py-3">{row.customerName}</td>
+                        <td className="px-4 py-3 font-mono text-[13px]">${row.amount.toLocaleString()}</td>
+                        <td className="px-4 py-3 font-mono text-[13px]">${row.margin.toLocaleString()}</td>
+                        <td className="px-4 py-3">{row.estimator}</td>
+                        <td className="px-4 py-3">{row.validUntil}</td>
+                        <td className="px-4 py-3">
+                          <SeverityBadge severity={row.risk === "High" ? "Critical" : row.risk === "Medium" ? "Warning" : "Info"} />
+                        </td>
+                        <td className="px-4 py-3">{row.reasonApprovalRequired}</td>
+                        <td className="px-4 py-3">
+                          <Link
+                            href={row.href}
+                            className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800"
+                          >
+                            {row.action}
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </DataTableShell>
+
+              <TimelineShell title="Approve Quote Q-1003" subtitle="Controlled owner review before conversion.">
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Decision</div>
+                    <div className="mt-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
+                      Approve quote
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Owner note</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Approved for production conversion. Margin and timeline acceptable.
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Conditions</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Scheduler to confirm capacity before release.
+                    </p>
+                  </div>
+                  <RiskAlert
+                    severity="Approval"
+                    title="Approving this quote will allow it to be converted into a production job."
+                    description="This is the last gated step before Job J-2104 and WO-2104 are created."
+                    href="/quotes/q-1003/convert"
+                    actionLabel="Approve Quote"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                    >
+                      Request Revision
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
+                    >
+                      Reject
+                    </button>
+                    <Link
+                      href="/quotes/q-1003/convert"
+                      className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                    >
+                      Approve Quote
+                    </Link>
+                  </div>
+                </div>
+              </TimelineShell>
+            </div>
+          </div>
+        );
+      }
 
     case "quote-convert":
-      return (
-        <>
-          <RiskAlert
-            severity="Success"
-            title="Quote conversion placeholder"
-            description="The app shell can already show the conversion step that will later create a real job. Phase 2 can add persisted state and transaction logic."
-            href="/jobs/j-2035"
-            actionLabel="Open job template"
-          />
-          <Checklist
-            items={[
-              { label: "Validate quote scope", state: "Approved" },
-              { label: "Assign job number", state: "Automation" },
-              { label: "Reserve planning slot", state: "Pending Inspection" },
-              { label: "Notify customer", state: "Info" }
-            ]}
-          />
-        </>
-      );
+      {
+        const quote = getQuoteById("Q-1003", quotes);
+        const quoteApproved = getAuditEventsByEntity("quote", "Q-1003", auditEvents);
+        const workOrderEvents = getAuditEventsByEntity("workOrder", "WO-2104", auditEvents);
+        const jobEvents = getAuditEventsByEntity("job", "J-2104", auditEvents);
+        const conversionAuditEvents = [
+          quoteApproved.find((event) => event.eventType === "owner-approved"),
+          quoteApproved.find((event) => event.eventType === "quote-converted"),
+          workOrderEvents[0],
+          jobEvents.find((event) => event.eventType === "routing-generated")
+        ].filter((event): event is NonNullable<typeof event> => Boolean(event));
+
+        return (
+          <div className="space-y-4">
+            <RiskAlert
+              severity="Success"
+              title="Quote Q-1003 approved by Owner / GM."
+              description="The quote is now cleared for production conversion and carries forward all seeded routing and material context."
+              href="/customer-service/jobs/j-2035"
+              actionLabel="Generate customer-safe status report"
+            />
+
+            <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+              <div className="space-y-4">
+                <MetricRow
+                  items={[
+                    { label: "Quote status", value: quote?.status === "Converted to Job" ? "Converted to Job" : "Approved", detail: "Approval audit event written", tone: "emerald" },
+                    { label: "Job number", value: q1003ConversionRecord.jobNumber, detail: "Created from the approved quote", tone: "blue" },
+                    { label: "Work order", value: q1003ConversionRecord.workOrder, detail: "Routing and traveler follow", tone: "amber" },
+                    { label: "Scheduler", value: q1003ConversionRecord.scheduler, detail: q1003ConversionRecord.supervisor, tone: "slate" }
+                  ]}
+                />
+
+                <DataTableShell title="Convert Quote Q-1003 to Production Job" subtitle="The seeded conversion state carries the quote into a job and work order.">
+                  <div className="grid gap-3 p-4 md:grid-cols-2">
+                    {[
+                      ["Quote", q1003ConversionRecord.quoteId],
+                      ["Customer", q1003ConversionRecord.customerName],
+                      ["Job number", q1003ConversionRecord.jobNumber],
+                      ["Work order", q1003ConversionRecord.workOrder],
+                      ["Routing template", q1003ConversionRecord.routingTemplate],
+                      ["Initial material reservation", q1003ConversionRecord.initialMaterialReservation],
+                      ["Scheduler", q1003ConversionRecord.scheduler],
+                      ["Supervisor", q1003ConversionRecord.supervisor]
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</div>
+                        <div className="mt-2 text-sm font-medium text-slate-950">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t border-slate-200 px-4 py-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Generated routing preview</div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {q1003ConversionRecord.generatedRouting.map((step) => (
+                        <StatusBadge key={step} label={step} />
+                      ))}
+                    </div>
+                    <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+                      Converting this quote will create a job, work order, initial routing, and material reservation tasks.
+                    </div>
+                  </div>
+                </DataTableShell>
+
+                <DataTableShell title="Post-conversion state" subtitle="The approved quote becomes executable production work.">
+                  <div className="grid gap-3 p-4 md:grid-cols-2">
+                    {[
+                      ["Job", q1003ConversionRecord.jobNumber],
+                      ["Work order", q1003ConversionRecord.workOrder],
+                      ["Source quote", q1003ConversionRecord.quoteId],
+                      ["Customer", q1003ConversionRecord.customerName],
+                      ["Routing", "Generated"],
+                      ["Initial material reservation", "Pending"],
+                      ["Assigned scheduler", q1003ConversionRecord.scheduler],
+                      ["Assigned supervisor", q1003ConversionRecord.supervisor]
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-md border border-slate-200 bg-white p-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</div>
+                        <div className="mt-2 text-sm font-medium text-slate-950">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t border-slate-200 px-4 py-4">
+                    <div className="flex flex-wrap gap-2">
+                      <StatusBadge label="Converted to Job" />
+                      <StatusBadge label="Approved" />
+                      <SeverityBadge severity="Automation" />
+                    </div>
+                  </div>
+                </DataTableShell>
+
+                <TimelineShell title="Permission reminder" subtitle="Role-based guidance for the quote-to-job transition.">
+                  <Checklist
+                    items={[
+                      { label: "Estimator can create and submit quotes", state: "Approved" },
+                      { label: "Owner / GM can approve high-value quotes", state: "Approval" },
+                      { label: "Operator cannot approve quotes or view sensitive margin details", state: "Blocked" },
+                      { label: "Scheduler receives the job only after approval and conversion", state: "Automation" }
+                    ]}
+                  />
+                </TimelineShell>
+              </div>
+
+              <div className="space-y-4">
+                <AuditPanel
+                  title="Audit panel"
+                  subtitle="Standardized conversion events show the end-to-end trace."
+                  items={conversionAuditEvents.map((event) => ({
+                    actor: event.actor,
+                    actorRole: event.actorRole,
+                    event: event.title,
+                    time: event.timestamp,
+                    detail: event.detail,
+                    severity: event.severity,
+                    entityHref:
+                      event.entityType === "quote"
+                        ? "/quotes/q-1003"
+                        : event.entityType === "workOrder"
+                          ? "/quotes/q-1003/convert"
+                          : "/quotes/q-1003/convert",
+                    entityLabel: event.entityId,
+                    result: event.detail,
+                    notes: event.detail,
+                    entityType: event.entityType
+                  }))}
+                />
+
+                <TimelineShell title="Next step" subtitle="Continue the founder demo into the customer-safe reporting flow.">
+                  <Link
+                    href="/customer-service/jobs/j-2035"
+                    className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                  >
+                    Generate customer-safe status report
+                  </Link>
+                </TimelineShell>
+              </div>
+            </div>
+          </div>
+        );
+      }
 
     case "customer-service":
       return (

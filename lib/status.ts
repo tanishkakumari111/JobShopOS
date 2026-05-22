@@ -23,6 +23,7 @@ const statusToneLookup: Record<string, Tone> = {
   Rejected: "rose",
   Expired: "slate",
   "Converted to Job": "emerald",
+  "Expiring Soon": "amber",
   "Waiting on Material": "amber",
   "Materials Reserved": "blue",
   "In Production": "blue",

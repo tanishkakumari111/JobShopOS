@@ -62,6 +62,18 @@ export const auditEvents: AuditEvent[] = [
     severity: "Automation"
   },
   {
+    id: 16,
+    eventType: "routing-generated",
+    entityType: "job",
+    entityId: "J-2104",
+    title: "Routing generated for J-2104",
+    detail: "Cut, Bend, Weld, Finish, Inspect, and Pack routing carried forward from Q-1003.",
+    actor: "System",
+    actorRole: "Automation",
+    timestamp: "10:46:13 AM",
+    severity: "Automation"
+  },
+  {
     id: 6,
     eventType: "job-moved-production",
     entityType: "job",

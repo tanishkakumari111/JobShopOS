@@ -32,7 +32,15 @@ export {
   j2042QualityTimeline,
   j2042ApprovalAuditTrail
 } from "./quality";
-export { quotes, quoteApprovalRequired } from "./quotes";
+export {
+  quotes,
+  quoteRoutingEstimateRows,
+  quoteMaterialEstimateRows,
+  q1003ApprovalHistory,
+  q1003QuoteForm,
+  q1003ConversionRecord,
+  quoteApprovalRequired
+} from "./quotes";
 export { reports } from "./reports";
 export { auditEvents } from "./audit-events";
 export { workCenters } from "./work-centers";
@@ -63,6 +71,9 @@ export {
   getPurchaseRequestState,
   getPurchaseRequestAuditEntries,
   getQuoteById,
+  getQuoteSummary,
+  getQuoteRows,
+  getApprovalQueueRows,
   getProductionQueue,
   getRecentAuditEvents,
   getInspectionQueue,
@@ -90,6 +101,14 @@ export type {
   PurchaseRequestAuditEntry,
   PurchaseRequestState,
   Quote,
+  QuoteApprovalHistoryEntry,
+  QuoteApprovalQueueRow,
+  QuoteConversionRecord,
+  QuoteDashboardRow,
+  QuoteFormSnapshot,
+  QuoteMaterialEstimateRow,
+  QuoteRoutingEstimateRow,
+  QuoteSummary,
   ProductionQueueRow,
   QualitySummary,
   QualityTimelineEntry,

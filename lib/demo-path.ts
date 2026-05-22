@@ -86,6 +86,7 @@ export const demoPath: DemoStep[] = [
     stepNumber: 9,
     title: "Quote Approval - Q-1003",
     route: "/quotes/q-1003",
+    aliases: ["/quotes", "/approvals"],
     previousRoute: "/purchase-requests/pr-3091",
     nextRoute: "/quotes/q-1003/convert",
     presenterNote:

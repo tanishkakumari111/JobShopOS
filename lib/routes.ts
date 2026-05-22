@@ -155,40 +155,47 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
   },
   quotes: {
     path: "/quotes",
-    title: "Quotes",
-    summary: "Quote pipeline with drafts, approvals, and conversion readiness.",
-    action: "New quote",
+    title: "Quotes Dashboard",
+    summary: "Drafts, approvals, and conversion readiness in one place.",
+    action: "Review approval",
     audience: "internal"
   },
   "quote-new": {
     path: "/quotes/new",
     title: "New Quote",
-    summary: "Placeholder entry screen for future estimation workflows.",
+    summary: "Estimator-focused quote creation UI with validation states.",
     action: "Save draft",
     audience: "internal"
   },
   "quote-1003": {
     path: "/quotes/q-1003",
-    title: "Quote Q-1003",
+    title: "Quote Detail - Q-1003",
     summary: "Approval-ready quote record with scope, pricing, and status history.",
-    action: "Submit for approval",
+    action: "Open Owner Approval Queue",
     audience: "internal",
-    demoStep: 9
+    demoStep: 9,
+    presenterNote:
+      "Now we move upstream to quoting. JobShop OS does not let high-value work enter production without owner approval."
   },
   approvals: {
     path: "/approvals",
-    title: "Approvals",
-    summary: "Owner and supervisor approvals will land here in a future phase.",
-    action: "Review approvals",
-    audience: "internal"
+    title: "Owner Approval Queue",
+    summary: "Owner and supervisor approvals for high-value work.",
+    action: "Approve quote",
+    audience: "internal",
+    demoStep: 9,
+    presenterNote:
+      "The Owner / GM can review high-value opportunities, margin, timing, and risk before approving production commitment."
   },
   "quote-convert": {
     path: "/quotes/q-1003/convert",
-    title: "Convert Quote",
-    summary: "Controlled conversion placeholder from quote approval to active job.",
+    title: "Convert Quote to Job - J-2104",
+    summary: "Controlled conversion from approved quote to active job and work order.",
     action: "Convert to job",
     audience: "internal",
-    demoStep: 10
+    demoStep: 10,
+    presenterNote:
+      "Once approved, the quote can now become real production work. The system carries forward routing, materials, supervisors, and audit history."
   },
   "customer-service": {
     path: "/customer-service",

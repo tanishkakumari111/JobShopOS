@@ -16,6 +16,9 @@ import type {
   PurchaseRequestAuditEntry,
   PurchaseRequestState,
   Quote,
+  QuoteApprovalQueueRow,
+  QuoteDashboardRow,
+  QuoteSummary,
   ProductionQueueRow,
   QualitySummary,
   ReworkOrder,
@@ -59,6 +62,77 @@ export function getJobById(id: string, jobs: Job[]) {
 
 export function getQuoteById(id: string, quotes: Quote[]) {
   return quotes.find((quote) => quote.id === id);
+}
+
+export function getQuoteSummary(quotes: Quote[], jobs: Job[] = []): QuoteSummary {
+  const convertedToJobs = jobs.filter((job) => job.sourceQuoteId).length;
+
+  return {
+    draftQuotes: quotes.filter((quote) => quote.status === "Draft").length,
+    submittedQuotes: quotes.filter((quote) => quote.status === "Submitted").length,
+    awaitingOwnerApproval: quotes.filter((quote) => quote.status === "Needs Owner Approval").length,
+    approvedThisMonth: quotes.filter((quote) => quote.status === "Approved").length,
+    convertedToJobs,
+    expiringSoon: quotes.filter((quote) => quote.expiresSoon).length,
+    totalQuotedValue: quotes.reduce((sum, quote) => sum + quote.amount, 0)
+  };
+}
+
+export function getQuoteRows(quotes: Quote[]): QuoteDashboardRow[] {
+  return quotes.map((quote) => ({
+    quoteId: quote.id,
+    customerName: quote.customerName,
+    part: quote.part,
+    amount: quote.amount,
+    margin: quote.margin,
+    status: quote.expiresSoon ? "Expiring Soon" : quote.status,
+    validUntil: quote.validUntil ?? "21 days",
+    estimator: quote.estimator,
+    approvalRequirement:
+      quote.id === "Q-1003"
+        ? "Owner / GM required"
+        : quote.status === "Draft"
+          ? "Incomplete"
+          : quote.status === "Submitted"
+            ? "Ready for approval"
+            : quote.expiresSoon
+              ? "Expiring soon"
+              : "Approved",
+    lastUpdated: quote.lastUpdated ?? "Today",
+    action:
+      quote.id === "Q-1003"
+        ? "Review approval"
+        : quote.status === "Draft"
+          ? "Complete quote"
+          : quote.expiresSoon
+            ? "Prioritize review"
+            : quote.status === "Approved"
+              ? "View quote"
+              : "View",
+    href: quote.id === "Q-1003" ? "/quotes/q-1003" : undefined,
+    highlight: quote.id === "Q-1003"
+  }));
+}
+
+export function getApprovalQueueRows(quotes: Quote[]): QuoteApprovalQueueRow[] {
+  return quotes
+    .filter((quote) => quote.status === "Needs Owner Approval" || requiresOwnerApproval(quote.amount, quote.approvalThreshold))
+    .map((quote) => ({
+      quoteId: quote.id,
+      customerName: quote.customerName,
+      amount: quote.amount,
+      margin: quote.margin,
+      estimator: quote.estimator,
+      validUntil: quote.validUntil ?? "21 days",
+      risk: quote.id === "Q-1003" ? "Medium" : quote.amount >= quote.approvalThreshold * 1.25 ? "High" : "Medium",
+      reasonApprovalRequired:
+        quote.id === "Q-1003"
+          ? "Above $50,000 threshold"
+          : "Requires owner review",
+      action: `Approve ${quote.id}`,
+      href: quote.id === "Q-1003" ? "/quotes/q-1003/convert" : `/quotes/${quote.id.toLowerCase()}`,
+      highlight: quote.id === "Q-1003"
+    }));
 }
 
 export function getMaterialBySku(sku: string, materials: Material[]) {
