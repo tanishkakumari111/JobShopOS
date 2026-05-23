@@ -697,7 +697,18 @@ export function createDatabaseRepositories(): RepositorySet {
             highlight: quote.id === "Q-1003"
           }));
       },
-      getApprovalHistory: notImplemented<QuoteApprovalHistoryEntry[]>("quotes.getApprovalHistory"),
+      getApprovalHistory: async (id: string) => {
+        const rows = await prisma.quoteApprovalHistory.findMany({
+          where: { quoteId: id },
+          orderBy: { createdAt: "asc" }
+        });
+
+        return rows.map((row): QuoteApprovalHistoryEntry => ({
+          timestamp: row.timestamp,
+          title: row.title,
+          detail: row.detail
+        }));
+      },
       getQuoteRoutingEstimate: notImplemented<QuoteRoutingEstimateRow[]>("quotes.getQuoteRoutingEstimate"),
       getQuoteMaterialEstimate: notImplemented<QuoteMaterialEstimateRow[]>("quotes.getQuoteMaterialEstimate"),
       getQuoteForm: notImplemented<QuoteFormSnapshot | undefined>("quotes.getQuoteForm"),

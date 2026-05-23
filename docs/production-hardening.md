@@ -138,3 +138,9 @@ Important behavior:
 - `JOBSHOP_DATA_SOURCE=demo` still uses the browser-local `lib/demo-state` workflow overlay
 - server commands are for database mode later, once route actions are intentionally switched over
 - the founder demo and demo-state reset flow remain available unchanged
+
+## Phase 12B Status
+
+`approveQuoteCommand()` is now implemented as the first transactional server command.
+
+It runs only in database mode, uses `WorkflowCommand` idempotency, writes transactional `AuditEvent` rows, and records an approval history row for the quote. Demo mode and the browser-local quote workflow remain unchanged until the UI is intentionally rewired later.
