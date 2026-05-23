@@ -1083,19 +1083,27 @@ async function seedAudit(tx: Prisma.TransactionClient) {
 async function main() {
   const prisma = getPrismaClient();
 
-  await prisma.$transaction(async (tx) => {
-    await seedCustomers(tx);
-    await seedWorkCenters(tx);
-    await seedMaterials(tx);
-    await seedQuotes(tx);
-    await seedJobs(tx);
-    await seedReworkOrders(tx);
-    await seedQuality(tx);
-    await seedQualityEvents(tx);
-    await seedPurchasing(tx);
-    await seedReports(tx);
-    await seedAudit(tx);
-  });
+  // Neon/CI can exceed Prisma's default 5s interactive transaction timeout during
+  // deterministic seed upserts, so give the importer more room to complete.
+  await prisma.$transaction(
+    async (tx) => {
+      await seedCustomers(tx);
+      await seedWorkCenters(tx);
+      await seedMaterials(tx);
+      await seedQuotes(tx);
+      await seedJobs(tx);
+      await seedReworkOrders(tx);
+      await seedQuality(tx);
+      await seedQualityEvents(tx);
+      await seedPurchasing(tx);
+      await seedReports(tx);
+      await seedAudit(tx);
+    },
+    {
+      timeout: 60000,
+      maxWait: 15000
+    }
+  );
 }
 
 main()
