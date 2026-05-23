@@ -1,0 +1,539 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CustomerStatus {
+  ACTIVE
+  AT_RISK
+  PROSPECT
+}
+
+enum QuoteStatus {
+  DRAFT
+  SUBMITTED
+  NEEDS_OWNER_APPROVAL
+  APPROVED
+  REJECTED
+  EXPIRED
+  CONVERTED_TO_JOB
+}
+
+enum JobStatus {
+  APPROVED
+  WAITING_ON_MATERIAL
+  PURCHASE_REQUESTED
+  MATERIALS_RESERVED
+  IN_PRODUCTION
+  IN_QUALITY
+  REWORK
+  READY_TO_SHIP
+  SHIPPED
+  CLOSED
+  SCRAP_APPROVAL_REQUIRED
+}
+
+enum JobRisk {
+  LOW
+  WATCH
+  HIGH
+  CRITICAL
+  NONE
+}
+
+enum WorkCenterStatus {
+  AVAILABLE
+  NEAR_CAPACITY
+  BOTTLENECK
+  OVER_CAPACITY
+  MAINTENANCE
+}
+
+enum PurchaseRequestStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  ORDERED
+}
+
+enum PurchaseRequestPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ReportAudience {
+  CUSTOMER
+  INTERNAL
+}
+
+enum QualityEventType {
+  INSPECTION_FAILED
+  SCRAP_LOGGED
+  SCRAP_APPROVED
+  REWORK_CREATED
+  QUALITY_SIGNOFF
+}
+
+enum ProductionUpdateStatus {
+  COMPLETE
+  PENDING
+  WATCH
+  INFO
+}
+
+enum ReworkOrderPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ReworkOrderStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETE
+  CLOSED
+}
+
+enum AuditSeverity {
+  INFO
+  WARNING
+  CRITICAL
+  BLOCKED
+  APPROVAL
+  AUTOMATION
+  SUCCESS
+}
+
+enum AuditEntityType {
+  QUOTE
+  JOB
+  WORK_ORDER
+  MATERIAL
+  PURCHASE_REQUEST
+  REPORT
+  QUALITY
+  REWORK_ORDER
+  CUSTOMER
+  WORK_CENTER
+  CAPACITY
+}
+
+enum WorkflowCommandStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  name         String?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  userRoles    UserRole[]
+}
+
+model Role {
+  id           String            @id @default(cuid())
+  key          String            @unique
+  name         String
+  description  String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  userRoles    UserRole[]
+  permissions  RolePermission[]
+}
+
+model UserRole {
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model Permission {
+  id           String            @id @default(cuid())
+  key          String            @unique
+  name         String
+  description  String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  roles        RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+  role         Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Customer {
+  slug                String          @id
+  name                String
+  shortName           String
+  status              CustomerStatus
+  primaryContact      String
+  city                String
+  state               String
+  accountContact      String?
+  email               String?
+  phone               String?
+  openJobs            Int?
+  openQuotes          Int?
+  onTimeDeliveryRate  Int?
+  lastUpdated         String?
+  tabs                Json?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  quotes              Quote[]
+  jobs                Job[]
+  reports             CustomerReport[]
+}
+
+model WorkCenter {
+  id                    String          @id
+  name                  String
+  capacityHoursPerWeek  Int
+  queuedHoursPerWeek    Int
+  utilization           Int
+  status                WorkCenterStatus
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+}
+
+model Material {
+  sku                   String    @id
+  name                  String
+  requiredForJobId      String
+  requiredSheets        Int
+  onHand                Int
+  reserved              Int
+  available             Int
+  shortage              Int
+  supplier              String
+  leadTimeBusinessDays  Int
+  lastPurchasePrice     Int
+  suggestedOrderQuantity Int
+  reorderPoint          Int?
+  contactEmail          String?
+  lastUpdated           String?
+  minimumOrderQuantity  Int?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  purchaseRequests      PurchaseRequest[]
+}
+
+model Quote {
+  id                    String       @id
+  slug                  String       @unique
+  customerSlug          String
+  customer              Customer     @relation(fields: [customerSlug], references: [slug], onDelete: Cascade)
+  customerName          String
+  part                  String
+  quantity              Int
+  amount                Int
+  status                QuoteStatus
+  estimator             String
+  approvalThreshold     Int
+  approvalRequiredRole  String
+  margin                Int
+  labor                 Int
+  materials             Int
+  outsideServices       Int
+  setupOverhead         Int
+  customerReference     String?
+  revision              String?
+  validUntil            String?
+  lastUpdated           String?
+  expiresSoon           Boolean      @default(false)
+  customerFacingNotes   String?
+  internalNotes         String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  routingSteps          QuoteRoutingStep[]
+  materialLines         QuoteMaterialLine[]
+  approvalHistory       QuoteApprovalHistory[]
+}
+
+model QuoteRoutingStep {
+  id            String   @id
+  quoteId       String
+  quote         Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  stepNumber    Int
+  operation     String
+  workCenter    String
+  estimatedHours Int
+  machine       String
+  notes         String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([quoteId])
+}
+
+model QuoteMaterialLine {
+  id              String   @id
+  quoteId         String
+  quote           Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  sku             String
+  materialName    String
+  quantity        String
+  unitCost        Int
+  extendedCost    Int
+  availabilityStatus String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([quoteId])
+}
+
+model QuoteApprovalHistory {
+  id          String   @id
+  quoteId     String
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  timestamp   String
+  title       String
+  detail      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([quoteId])
+}
+
+model Job {
+  id                    String       @id
+  slug                  String       @unique
+  customerSlug          String
+  customer              Customer     @relation(fields: [customerSlug], references: [slug], onDelete: Cascade)
+  customerName          String
+  customerPo            String?
+  part                  String
+  quantity              Int
+  completedQuantity     Int?
+  scrapQuantity         Int?
+  scrapRate             Float?
+  allowedTolerance      Float?
+  status                JobStatus
+  currentStep           String?
+  blockedStep           String?
+  workCenter            String
+  risk                  JobRisk
+  dueDate               String
+  workOrder             String?
+  reworkOrder           String?
+  purchaseRequestId     String?
+  reportGenerated       Boolean      @default(false)
+  requiredMaterial      String?
+  shortageSheets        Int?
+  sourceQuoteId         String?
+  progress              Int?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  routingSteps          JobRoutingStep[]
+  materialRequirements  JobMaterialRequirement[]
+  materialReservations  JobMaterialReservation[]
+  productionUpdates     ProductionUpdate[]
+  qualityEvents         QualityEvent[]
+  reworkOrders          ReworkOrder[]
+  purchaseRequests      PurchaseRequest[]
+  customerReports       CustomerReport[]
+}
+
+model JobRoutingStep {
+  id              String   @id
+  jobId           String
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  stepNumber      Int
+  operation       String
+  workCenter      String
+  plannedHours    Int
+  actualHours     Float?
+  assignedOperator String
+  machine         String
+  status          String
+  timestamp       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([jobId])
+}
+
+model JobMaterialRequirement {
+  id               String   @id
+  jobId            String
+  job              Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  sku              String
+  materialName     String?
+  requiredQuantity Int
+  status           String?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([jobId])
+}
+
+model JobMaterialReservation {
+  id              String   @id
+  jobId           String
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  sku             String
+  reservedQuantity Int
+  lotNumber       String?
+  signOff         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([jobId])
+}
+
+model ProductionUpdate {
+  id          String                @id
+  jobId       String
+  job         Job                   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  label       String
+  detail      String
+  status      ProductionUpdateStatus
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([jobId])
+}
+
+model QualityEvent {
+  id                String           @id
+  jobId             String
+  job               Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  eventType         QualityEventType
+  title             String
+  detail            String
+  timestamp         String
+  severity          AuditSeverity?
+  reportedBy        String?
+  reportedAt        String?
+  reason            String?
+  operatorNote      String?
+  inspectionNote    String?
+  workCenter        String?
+  scrapQuantity     Int?
+  completedQuantity Int?
+  scrapRate         Float?
+  allowedTolerance  Float?
+  reworkOrderId     String?
+  reworkOrder       ReworkOrder?     @relation(fields: [reworkOrderId], references: [id], onDelete: SetNull)
+  metadata          Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([jobId])
+}
+
+model ReworkOrder {
+  id            String    @id
+  linkedJobId   String
+  job           Job       @relation(fields: [linkedJobId], references: [id], onDelete: Cascade)
+  reason        String
+  workCenter    String
+  estimatedHours Int
+  priority      ReworkOrderPriority
+  status        ReworkOrderStatus
+  supervisor    String
+  nextStep      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  qualityEvents QualityEvent[]
+}
+
+model PurchaseRequest {
+  id            String                @id
+  materialSku   String
+  material      Material              @relation(fields: [materialSku], references: [sku], onDelete: Cascade)
+  linkedJobId   String
+  job           Job                   @relation(fields: [linkedJobId], references: [id], onDelete: Cascade)
+  supplier      String
+  quantity      Int
+  unitCost      Int
+  estimatedTotal Int
+  buyer         String
+  status        PurchaseRequestStatus
+  priority      PurchaseRequestPriority
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+}
+
+model CustomerReport {
+  id                    String          @id
+  jobId                 String
+  job                   Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customerSlug          String?
+  customer              Customer?       @relation(fields: [customerSlug], references: [slug], onDelete: SetNull)
+  title                 String
+  audience              ReportAudience
+  summary               String
+  generatedAt           String
+  savedAs               String?
+  customerName          String?
+  contact               String?
+  customerPo            String?
+  part                  String?
+  quantity              Int?
+  dueDate               String?
+  currentStatus         String?
+  customerFacingStatus  String?
+  progress              Int?
+  nextMilestone         String?
+  shipmentReadiness      String?
+  preparedBy            String?
+  preparedTimestamp     String?
+  message               String?
+  reportSavedTo         String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  @@index([jobId])
+}
+
+model AuditEvent {
+  id          Int             @id
+  timestamp   String
+  actor       String
+  role        String
+  action      String
+  entityType  AuditEntityType
+  entityId    String
+  result      String
+  notes       String
+  severity    AuditSeverity
+  eventType   String?
+  title       String?
+  detail      String?
+  metadata    Json?
+  createdAt   DateTime        @default(now())
+}
+
+model WorkflowCommand {
+  id              String               @id @default(cuid())
+  commandType     String
+  idempotencyKey  String               @unique
+  actor           String
+  role            String
+  entityType      String
+  entityId        String
+  status          WorkflowCommandStatus
+  result          Json?
+  createdAt       DateTime             @default(now())
+}

@@ -24,8 +24,6 @@ import {
 } from "@/components/customer-report-workflow-pages";
 import {
   ApprovalsView,
-  AuditTrailView,
-  EntityTimelineView,
   QuoteConversionView,
   QuoteDetailView
 } from "@/components/quote-workflow-pages";
@@ -44,80 +42,50 @@ import { routeMeta, type RouteKey } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import {
   auditEvents,
-  calculateScrapRate,
-  customers,
-  getAuditEventsByEntity,
   getCapacitySummary,
-  getCustomerSafeJobStatus,
-  getCustomerServiceSummary,
-  getCustomerRiskQueue,
-  getCustomerStatusReports,
-  getAuditSummary,
-  getAuditEntityQuickFilters,
-  getAuditTimelineRows,
   getDashboardRiskItems,
   getDashboardMetrics,
-  getCapacityRiskJobIds,
-  getJobById,
-  getJ2035EntityTimeline,
-  getJobTraceEvents,
-  getMaterialBySku,
-  getMaterialsSummary,
-  getMaterialRows,
-  getBlockedJobsByMaterialShortage,
-  getMaterialReservationBreakdown,
-  getMaterialSupplierPanel,
-  getMaterialImpactTimeline,
-  getPurchaseRequestById,
-  getPurchaseRequestState,
-  getPurchaseRequestAuditEntries,
-  getQuoteById,
-  getQuoteSummary,
-  getQuoteRows,
-  getApprovalQueueRows,
   getProductionQueue,
-  getQualitySummary,
-  getInspectionQueue,
-  getDefectReasonBreakdown,
+  getWorkCenterCapacityRows,
   getRecentAuditEvents,
-  getReworkOrderById,
   getFinalValuePillars,
   getDemoPathRecap,
-  defectReasonBreakdownRows,
-  inspectionQueueRows,
-  j2042ApprovalAuditTrail,
-  j2042QualityTimeline,
-  j2042ScrapEventDetail,
-  materialImpactTimeline,
-  quoteRoutingEstimateRows,
-  quoteMaterialEstimateRows,
-  q1003ApprovalHistory,
   q1003QuoteForm,
-  q1003ConversionRecord,
-  j2035ProductionUpdates,
-  j2035QualityInspectionChecks,
-  j2035QualityReadiness,
-  j2035ScrapAndReworkFields,
-  j2035RoutingSteps,
-  j2035TravelerMaterials,
-  j2035TravelerRoutingRows,
-  j2035TravelerSignOffFields,
-  j2035TravelerShipping,
   jobs,
   materials,
-  purchaseRequests,
-  purchaseRequestState,
-  pr3091AuditTrail,
   quotes,
-  reports,
-  customerSafeTimeline,
-  customerStatusReport,
-  metrofabCustomerProfile,
   reworkOrders,
   demoPath,
-  getWorkCenterCapacityRows,
   workCenters
 } from "@/lib/demo-data";
+import {
+  getCapacityPlannerReadModel,
+  getJobDetailReadModel,
+  getWorkOrderTravelerReadModel
+} from "@/lib/read-models/production";
+import {
+  getCustomerDetailReadModel,
+  getCustomerSafeJobStatusReadModel,
+  getCustomerServiceReadModel,
+  getCustomerStatusReportReadModel,
+  getPrintableCustomerReportReadModel
+} from "@/lib/read-models/customer-reporting";
+import {
+  getMaterialDetailReadModel,
+  getMaterialImpactReadModel,
+  getMaterialsDashboardReadModel,
+  getPurchaseRequestReadModel
+} from "@/lib/read-models/materials";
+import {
+  getQualityDashboardReadModel,
+  getReworkCreatedReadModel,
+  getScrapApprovalReadModel
+} from "@/lib/read-models/quality";
+import {
+  getApprovalsReadModel,
+  getQuoteDetailReadModel,
+  getQuotesDashboardReadModel
+} from "@/lib/read-models/quotes";
 
 function PageHeader({
   title,
@@ -217,27 +185,7 @@ function TinyTable({
   );
 }
 
-function Checklist({
-  items
-}: {
-  items: Array<{ label: string; state: string }>;
-}) {
-  return (
-    <div className="grid gap-2 md:grid-cols-2">
-      {items.map((item) => (
-        <div
-          key={item.label}
-          className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5"
-        >
-          <span className="text-sm font-medium text-slate-950">{item.label}</span>
-          <StatusBadge label={item.state} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function routeBlocks(routeKey: RouteKey) {
+async function routeBlocks(routeKey: RouteKey) {
   switch (routeKey) {
     case "home":
       {
@@ -457,9 +405,8 @@ function routeBlocks(routeKey: RouteKey) {
 
     case "capacity":
       {
-        const summary = getCapacitySummary(workCenters);
-        const capacityRows = getWorkCenterCapacityRows(workCenters, jobs);
-        const capacityRiskJobIds = getCapacityRiskJobIds(jobs, workCenters);
+        const readModel = await getCapacityPlannerReadModel();
+        const { summary, capacityRows, capacityRiskJobIds } = readModel;
 
         return (
           <>
@@ -657,10 +604,8 @@ function routeBlocks(routeKey: RouteKey) {
 
     case "job-2035":
       {
-        const job = getJobById("J-2035", jobs);
-        const customerSafe = getCustomerSafeJobStatus("J-2035", jobs);
-        const jobTrace = getJobTraceEvents("J-2035", auditEvents);
-        const pressBrake = workCenters.find((workCenter) => workCenter.name === "Press Brake");
+        const readModel = await getJobDetailReadModel("J-2035");
+        const { job, customerSafe, capacitySummary, jobTrace, routingSteps, productionUpdates, qualityReadiness, travelerMaterials } = readModel;
 
         return (
           <>
@@ -769,7 +714,7 @@ function routeBlocks(routeKey: RouteKey) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {j2035RoutingSteps.map((step) => {
+                      {routingSteps.map((step) => {
                         const current = step.operation === "Bend";
                         return (
                           <tr key={step.stepNumber} className={cn(current && "bg-rose-50/50")}>
@@ -803,7 +748,7 @@ function routeBlocks(routeKey: RouteKey) {
                 <RiskAlert
                   severity="Critical"
                   title="Why this job is at risk"
-                  description={`Press Brake weekly capacity: ${pressBrake?.capacityHoursPerWeek ?? 40}h. Queued load: ${pressBrake?.queuedHoursPerWeek ?? 52}h. Current Bend step may delay downstream Weld and Finish steps.`}
+                  description={`Press Brake weekly capacity: ${capacitySummary.capacityHoursPerWeek}h. Queued load: ${capacitySummary.queuedHoursPerWeek}h. Current Bend step may delay downstream Weld and Finish steps.`}
                   href="/capacity"
                   actionLabel="Open Press Brake capacity view"
                 />
@@ -823,7 +768,7 @@ function routeBlocks(routeKey: RouteKey) {
                       <div className="mt-2 leading-6 text-slate-700">No current material blocker for J-2035.</div>
                     </div>
                     <div className="space-y-2">
-                      {j2035TravelerMaterials.map((row) => (
+                      {travelerMaterials.map((row) => (
                         <div key={row.sku} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
                           <div className="flex items-start justify-between gap-3">
                             <div className="space-y-1">
@@ -844,7 +789,7 @@ function routeBlocks(routeKey: RouteKey) {
                     <p className="mt-1 text-sm text-slate-500">Inspection gates stay visible while production continues.</p>
                   </div>
                   <div className="space-y-3 px-4 py-4">
-                    {j2035QualityReadiness.map((item) => (
+                    {qualityReadiness.map((item) => (
                       <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
                         <span className="text-slate-700">{item.label}</span>
                         <span className="font-medium text-slate-950">{item.value}</span>
@@ -861,7 +806,7 @@ function routeBlocks(routeKey: RouteKey) {
             <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
               <DataTableShell title="Production updates" subtitle="Operator-facing updates for the live production record.">
                 <div className="space-y-3 p-4">
-                  {j2035ProductionUpdates.map((update) => (
+                  {productionUpdates.map((update) => (
                     <div key={update.label} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
                       <div className="flex items-center justify-between gap-3">
                         <div>
@@ -911,7 +856,16 @@ function routeBlocks(routeKey: RouteKey) {
 
     case "work-order-traveler":
       {
-        const job = getJobById("J-2035", jobs);
+        const readModel = await getWorkOrderTravelerReadModel("J-2035");
+        const {
+          job,
+          travelerRoutingRows,
+          travelerMaterials,
+          travelerSignOffFields,
+          qualityInspectionChecks,
+          scrapAndReworkFields,
+          travelerShipping
+        } = readModel;
 
       return (
         <div className="space-y-4">
@@ -1010,7 +964,7 @@ function routeBlocks(routeKey: RouteKey) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-300">
-                    {j2035TravelerRoutingRows.map((row) => (
+                    {travelerRoutingRows.map((row) => (
                       <tr key={row.step} className={cn(row.operation === "Bend" && "bg-rose-50/40")}>
                         <td className="px-3 py-3 font-mono font-semibold text-slate-950">{row.step}</td>
                         <td className="px-3 py-3 text-slate-800">{row.operation}</td>
@@ -1047,7 +1001,7 @@ function routeBlocks(routeKey: RouteKey) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-300">
-                      {j2035TravelerMaterials.map((row) => (
+                      {travelerMaterials.map((row) => (
                         <tr key={row.sku}>
                           <td className="px-3 py-3">
                             <EntityLink href={`/materials/${row.sku.toLowerCase()}`}>{row.sku}</EntityLink>
@@ -1069,7 +1023,7 @@ function routeBlocks(routeKey: RouteKey) {
               <section className="space-y-3">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Operator sign-off</div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  {j2035TravelerSignOffFields.map((field) => (
+                  {travelerSignOffFields.map((field) => (
                     <div key={field.label} className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2.5">
                       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{field.label}</div>
                       <div className="mt-2 text-sm font-medium text-slate-950">{field.value}</div>
@@ -1083,14 +1037,14 @@ function routeBlocks(routeKey: RouteKey) {
               <section className="space-y-3">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Quality inspection</div>
                 <div className="space-y-2 rounded-md border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700">
-                  {j2035QualityInspectionChecks.slice(0, 3).map((check) => (
+                  {qualityInspectionChecks.slice(0, 3).map((check) => (
                     <div key={check.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2.5">
                       <span>{check.label}</span>
                       <StatusBadge label={check.value} />
                     </div>
                   ))}
                   <div className="grid gap-3 md:grid-cols-3">
-                    {j2035QualityInspectionChecks.slice(3).map((check) => (
+                    {qualityInspectionChecks.slice(3).map((check) => (
                       <div key={check.label} className="rounded-md border border-slate-200 bg-white px-3 py-2.5">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{check.label}</div>
                         <div className="mt-2 text-sm font-medium text-slate-950">{check.value}</div>
@@ -1103,7 +1057,7 @@ function routeBlocks(routeKey: RouteKey) {
               <section className="space-y-3">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Scrap and rework</div>
                 <div className="space-y-2 rounded-md border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700">
-                  {j2035ScrapAndReworkFields.map((field) => (
+                  {scrapAndReworkFields.map((field) => (
                     <div key={field.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2.5">
                       <span>{field.label}</span>
                       <span className="font-medium text-slate-950">{field.value}</span>
@@ -1115,7 +1069,7 @@ function routeBlocks(routeKey: RouteKey) {
               <section className="space-y-3">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Shipping sign-off</div>
                 <div className="space-y-2 rounded-md border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700">
-                  {j2035TravelerShipping.map((item) => (
+                  {travelerShipping.map((item) => (
                     <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2.5">
                       <span>{item.label}</span>
                       <span className="font-medium text-slate-950">{item.value}</span>
@@ -1140,1001 +1094,121 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "quality":
-      return <QualityDashboardView />;
-
       {
-        const summary = getQualitySummary(jobs, reworkOrders, inspectionQueueRows);
-        const inspectionQueue = getInspectionQueue(inspectionQueueRows);
-        const defectReasons = getDefectReasonBreakdown(defectReasonBreakdownRows);
-
+        const model = await getQualityDashboardReadModel();
         return (
-          <>
-            <MetricRow
-              items={[
-                {
-                  label: "Open inspections",
-                  value: `${summary.openInspections}`,
-                  detail: "Inspection queue activity",
-                  tone: "blue"
-                },
-                {
-                  label: "Failed inspections",
-                  value: `${summary.failedInspections}`,
-                  detail: "Jobs that need disposition",
-                  tone: "rose"
-                },
-                {
-                  label: "Scrap above tolerance",
-                  value: `${summary.scrapAboveTolerance}`,
-                  detail: "Jobs blocked on approval",
-                  tone: "amber"
-                },
-                {
-                  label: "Rework orders open",
-                  value: `${summary.reworkOrdersOpen}`,
-                  detail: "Controlled follow-up work",
-                  tone: "rose"
-                },
-                {
-                  label: "Jobs waiting for sign-off",
-                  value: `${summary.jobsWaitingForSignOff}`,
-                  detail: "Supervisor or inspector action",
-                  tone: "amber"
-                },
-                {
-                  label: "Average first-pass yield",
-                  value: `${summary.averageFirstPassYield.toFixed(1)}%`,
-                  detail: "Based on seeded job records",
-                  tone: "emerald"
-                }
-              ]}
-            />
-
-            <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-              <div className="space-y-4">
-                <RiskAlert
-                  severity="Critical"
-                  title="J-2042 requires immediate scrap approval"
-                  description="Scrap exceeds tolerance. Supervisor approval required before production can continue."
-                  href="/quality/j-2042/scrap-approval"
-                  actionLabel="Review scrap approval"
-                />
-
-                <DataTableShell
-                  title="Inspection queue"
-                  subtitle="Primary exception plus a few supporting rows from the seeded quality record."
-                >
-                  <TinyTable
-                    columns={["Job", "Customer", "Part", "Current step", "Inspector", "Result", "Scrap rate", "Status", "Due date", "Action"]}
-                    rows={inspectionQueue.map((row) => [
-                      <EntityLink href={row.href}>{row.jobId}</EntityLink>,
-                      row.customerName,
-                      row.part,
-                      row.currentStep,
-                      row.inspector,
-                      <StatusBadge label={row.result} />,
-                      row.scrapRate,
-                      <StatusBadge label={row.status} />,
-                      row.dueDate,
-                      <EntityLink href={row.href}>{row.action}</EntityLink>
-                    ])}
-                  />
-                </DataTableShell>
-              </div>
-
-              <div className="space-y-4">
-                <TimelineShell
-                  title="Defect reason breakdown"
-                  subtitle="Most common defect families contributing to scrap and rework."
-                >
-                  <div className="space-y-3">
-                    {defectReasons.map((reason) => (
-                      <div key={reason.reason} className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-3 text-sm">
-                          <span className="font-medium text-slate-950">{reason.reason}</span>
-                          <span className="font-mono text-slate-500">
-                            {reason.count} / {reason.percentage}%
-                          </span>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-200">
-                          <div
-                            className="h-2 rounded-full bg-rose-500"
-                            style={{ width: `${reason.percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </TimelineShell>
-
-                <TimelineShell
-                  title="Recent quality events"
-                  subtitle="Timeline from inspection failure through controlled rework."
-                >
-                  <div className="space-y-3">
-                    {j2042QualityTimeline.map((entry) => (
-                      <div key={`${entry.timestamp}-${entry.title}`} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-sm font-semibold text-slate-950">{entry.title}</div>
-                          <SeverityBadge severity={entry.severity} />
-                        </div>
-                        <p className="mt-1 text-sm leading-6 text-slate-600">{entry.detail}</p>
-                        <div className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
-                          {entry.timestamp}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </TimelineShell>
-              </div>
-            </div>
-          </>
+          <QualityDashboardView
+            baseJobs={model.baseJobs}
+            baseReworkOrders={model.baseReworkOrders}
+            baseAuditEvents={model.baseAuditEvents}
+            baseInspectionQueueRows={model.baseInspectionQueueRows}
+            baseDefectReasonBreakdownRows={model.baseDefectReasonBreakdownRows}
+            baseQualityTimeline={model.baseQualityTimeline}
+          />
         );
       }
-
     case "quality-scrap":
-      return <ScrapApprovalView />;
-
       {
-        const job = getJobById("J-2042", jobs);
-        const rework = getReworkOrderById("RW-2042-01", reworkOrders);
-        const scrapRate = job?.scrapRate ?? calculateScrapRate(job?.scrapQuantity ?? 0, job?.completedQuantity ?? 0);
-        const toleranceRate = job?.allowedTolerance ?? 0.05;
-        const selectedDecision = "Approve scrap and create rework";
-
+        const model = await getScrapApprovalReadModel("J-2042");
         return (
-          <div className="space-y-4">
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <EntityLink href="/jobs/j-2042">J-2042</EntityLink>
-                    <StatusBadge label="Scrap Approval Required" />
-                    <SeverityBadge severity="Critical" />
-                  </div>
-                  <div className="grid gap-x-4 gap-y-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-                    <div>Customer: <span className="font-medium text-slate-950">{job?.customerName ?? "Northline Fabrication"}</span></div>
-                    <div>Part: <span className="font-medium text-slate-950">{job?.part ?? "Bracket Assembly Rev B"}</span></div>
-                    <div>Quantity: <span className="font-medium text-slate-950">{job?.quantity ?? 200}</span></div>
-                    <div>Completed quantity: <span className="font-medium text-slate-950">{job?.completedQuantity ?? 180}</span></div>
-                    <div>Scrap quantity: <span className="font-medium text-slate-950">{job?.scrapQuantity ?? 18}</span></div>
-                    <div>Scrap rate: <span className="font-medium text-rose-700">{Math.round(scrapRate * 100)}%</span></div>
-                    <div>Allowed tolerance: <span className="font-medium text-slate-950">{Math.round(toleranceRate * 100)}%</span></div>
-                    <div>Work center: <span className="font-medium text-slate-950">{job?.workCenter ?? "Welding"}</span></div>
-                    <div>Current routing step: <span className="font-medium text-slate-950">{job?.currentStep ?? "Weld"}</span></div>
-                    <div>Assigned operator: <span className="font-medium text-slate-950">Marco Singh</span></div>
-                    <div>Supervisor: <span className="font-medium text-slate-950">Dana Brooks</span></div>
-                    <div>Due date risk: <span className="font-medium text-rose-700">High</span></div>
-                  </div>
-                </div>
-                <Link
-                  href="/quality/j-2042/rework-created"
-                  className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                >
-                  Approve scrap and create rework
-                </Link>
-              </div>
-            </div>
-
-            <RiskAlert
-              severity="Critical"
-              title="Scrap approval is required"
-              description="Scrap rate is above the 5% tolerance. Production is blocked until a supervisor decision is recorded."
-              href="/quality/j-2042/rework-created"
-              actionLabel="Approve scrap and create rework"
-            />
-
-            <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-              <div className="space-y-4">
-                <TimelineShell title="Scrap event details" subtitle="Recorded by the operator and reviewed by quality.">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reported by operator</div>
-                      <div className="mt-2 text-sm font-medium text-slate-950">{j2042ScrapEventDetail.reportedBy}</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reported at</div>
-                      <div className="mt-2 text-sm font-medium text-slate-950">{j2042ScrapEventDetail.reportedAt}</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reason</div>
-                      <div className="mt-2 text-sm font-medium text-slate-950">{j2042ScrapEventDetail.reason}</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Operator note</div>
-                      <div className="mt-2 text-sm leading-6 text-slate-700">{j2042ScrapEventDetail.operatorNote}</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Inspection note</div>
-                      <div className="mt-2 text-sm leading-6 text-slate-700">{j2042ScrapEventDetail.inspectionNote}</div>
-                    </div>
-                  </div>
-                </TimelineShell>
-
-                <DataTableShell title="Decision panel" subtitle="Static supervisor decision UI for the quality exception.">
-                  <div className="space-y-3 p-4">
-                    {[
-                      "Approve scrap and create rework",
-                      "Reject scrap log and return to operator",
-                      "Hold job for engineering review"
-                    ].map((option) => {
-                      const selected = option === selectedDecision;
-                      return (
-                        <div
-                          key={option}
-                          className={cn(
-                            "rounded-md border p-3",
-                            selected ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-white"
-                          )}
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-semibold text-slate-950">{option}</div>
-                              {selected ? (
-                                <p className="mt-1 text-sm leading-6 text-slate-600">
-                                  Supervisor note: Approve scrap event. Create weld rework and inspect fixture setup before continuing.
-                                </p>
-                              ) : null}
-                            </div>
-                            {selected ? <StatusBadge label="Selected" /> : <StatusBadge label="Pending" />}
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Decision</div>
-                        <div className="mt-2 text-sm font-medium text-slate-950">{selectedDecision}</div>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Rework required</div>
-                        <div className="mt-2 text-sm font-medium text-slate-950">Yes</div>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Rework routing step</div>
-                        <div className="mt-2 text-sm font-medium text-slate-950">{rework?.nextStep ?? "Weld Rework"}</div>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Estimated rework hours</div>
-                        <div className="mt-2 text-sm font-medium text-slate-950">{rework?.estimatedHours ?? 6}h</div>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Priority</div>
-                        <div className="mt-2 text-sm font-medium text-slate-950">{rework?.priority ?? "High"}</div>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Supervisor note</div>
-                        <div className="mt-2 text-sm leading-6 text-slate-700">
-                          Approve scrap event. Create weld rework and inspect fixture setup before continuing.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </DataTableShell>
-              </div>
-
-              <div className="space-y-4">
-                <TimelineShell title="Rework preview" subtitle="Controlled follow-up that links the quality exception to the new job path.">
-                  <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <EntityLink href="/quality/j-2042/rework-created">RW-2042-01</EntityLink>
-                      <StatusBadge label={rework?.status ?? "Open"} />
-                    </div>
-                    <div className="grid gap-2 text-sm text-slate-700">
-                      <div>Linked job: <span className="font-medium text-slate-950">{rework?.linkedJobId ?? "J-2042"}</span></div>
-                      <div>Step: <span className="font-medium text-slate-950">{rework?.nextStep ?? "Weld Rework"}</span></div>
-                      <div>Work center: <span className="font-medium text-slate-950">{rework?.workCenter ?? "Welding"}</span></div>
-                      <div>Estimated hours: <span className="font-medium text-slate-950">{rework?.estimatedHours ?? 6}h</span></div>
-                      <div>Priority: <span className="font-medium text-slate-950">{rework?.priority ?? "High"}</span></div>
-                      <div>Supervisor: <span className="font-medium text-slate-950">{rework?.supervisor ?? "Dana Brooks"}</span></div>
-                    </div>
-                  </div>
-                </TimelineShell>
-
-                <TimelineShell title="Permission cue" subtitle="Who can act on the quality exception.">
-                  <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                    <div className="font-semibold text-slate-950">Supervisor approval required</div>
-                    <div className="grid gap-2">
-                      <div>Operator can log scrap</div>
-                      <div>Shop Supervisor approves scrap/rework</div>
-                      <div>Quality Inspector records inspection</div>
-                      <div>Owner / GM can view exception status</div>
-                    </div>
-                  </div>
-                </TimelineShell>
-              </div>
-            </div>
-          </div>
+          <ScrapApprovalView
+            baseJobs={model.baseJobs}
+            baseReworkOrders={model.baseReworkOrders}
+            baseAuditEvents={model.baseAuditEvents}
+            baseScrapEventDetail={model.baseScrapEventDetail}
+          />
         );
       }
-
     case "quality-rework":
-      return <ReworkCreatedView />;
-
       {
-        const rework = getReworkOrderById("RW-2042-01", reworkOrders);
-
+        const model = await getReworkCreatedReadModel("J-2042");
         return (
-          <div className="space-y-4">
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-                    Rework created
-                  </div>
-                  <h3 className="text-[15px] font-semibold text-emerald-950">
-                    Rework order RW-2042-01 created and linked to Job J-2042.
-                  </h3>
-                  <p className="max-w-3xl text-sm leading-6 text-emerald-900/80">
-                    The job is now controlled through rework routing instead of an open scrap exception.
-                  </p>
-                </div>
-                <StatusBadge label="Rework Created" />
-              </div>
-            </div>
-
-            <MetricRow
-              items={[
-                {
-                  label: "Job status",
-                  value: "Rework",
-                  detail: "Changed from Scrap Approval Required",
-                  tone: "rose"
-                },
-                {
-                  label: "Scrap event",
-                  value: "Approved",
-                  detail: "Supervisor decision recorded",
-                  tone: "emerald"
-                },
-                {
-                  label: "Rework order",
-                  value: rework?.id ?? "RW-2042-01",
-                  detail: "Controlled follow-up routing",
-                  tone: "blue"
-                },
-                {
-                  label: "Quality dashboard",
-                  value: "Updated",
-                  detail: "Exception counts recalculate",
-                  tone: "emerald"
-                }
-              ]}
-            />
-
-            <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-              <TimelineShell title="Rework order card" subtitle="Controlled follow-up linked back to the original job.">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Rework order</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.id ?? "RW-2042-01"}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Job</div>
-                    <EntityLink href="/jobs/j-2042" className="mt-2 inline-flex">
-                      {rework?.linkedJobId ?? "J-2042"}
-                    </EntityLink>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">Northline Fabrication</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reason</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.reason ?? "Weld Porosity"}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Work center</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.workCenter ?? "Welding"}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Estimated hours</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.estimatedHours ?? 6}h</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Priority</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.priority ?? "High"}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Status</div>
-                    <div className="mt-2"><StatusBadge label={rework?.status ?? "Open"} /></div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Assigned supervisor</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.supervisor ?? "Dana Brooks"}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Next step</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">{rework?.nextStep ?? "Weld Rework"}</div>
-                  </div>
-                </div>
-              </TimelineShell>
-
-              <div className="space-y-4">
-                <TimelineShell title="Updated job timeline" subtitle="The exception is now a controlled production task.">
-                  <div className="space-y-3">
-                    {[
-                      { label: "Inspection failed", detail: "Sample failed visual weld inspection.", tone: "Critical" },
-                      { label: "Scrap logged", detail: "Marco Singh recorded 18 scrap units.", tone: "Warning" },
-                      { label: "Supervisor review required", detail: "Production blocked until a decision is recorded.", tone: "Approval" },
-                      { label: "Scrap approved", detail: "Dana Brooks approved the disposition.", tone: "Success" },
-                      { label: "Rework order created", detail: "RW-2042-01 linked to J-2042.", tone: "Automation" },
-                      { label: "Awaiting weld rework", detail: "Controlled routing is now active.", tone: "Info" }
-                    ].map((item) => (
-                      <div key={item.label} className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                        <div>
-                          <div className="text-sm font-medium text-slate-950">{item.label}</div>
-                          <div className="mt-1 text-sm leading-6 text-slate-600">{item.detail}</div>
-                        </div>
-                        <SeverityBadge severity={item.tone} />
-                      </div>
-                    ))}
-                  </div>
-                </TimelineShell>
-
-                <AuditPanel
-                  title="Audit panel"
-                  subtitle="Supervisor and system events show the controlled handoff from scrap to rework."
-                  items={j2042ApprovalAuditTrail.map((entry) => ({
-                    actor: entry.actor,
-                    actorRole: entry.actorRole,
-                    event: entry.action,
-                    time: entry.timestamp,
-                    detail: entry.result,
-                    severity: entry.severity,
-                    entityHref:
-                      entry.entityId === "J-2042"
-                        ? "/quality/j-2042/scrap-approval"
-                        : "/quality/j-2042/rework-created",
-                    entityLabel: entry.entityId,
-                    result: entry.result,
-                    notes: entry.notes,
-                    entityType: entry.entityType
-                  }))}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <Link
-                href="/jobs/j-2099/material-impact"
-                className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-              >
-                Review material shortage J-2099
-              </Link>
-            </div>
-          </div>
+          <ReworkCreatedView
+            baseJobs={model.baseJobs}
+            baseReworkOrders={model.baseReworkOrders}
+            baseAuditEvents={model.baseAuditEvents}
+          />
         );
       }
-
     case "materials":
-      return <MaterialDashboardView />;
-
       {
-        const summary = getMaterialsSummary(materials, jobs, purchaseRequests);
-        const rows = getMaterialRows(materials, jobs);
-        const blockedJobs = getBlockedJobsByMaterialShortage(jobs, materials);
-        const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
-        const pr = getPurchaseRequestById("PR-3091", purchaseRequests);
-
+        const model = await getMaterialsDashboardReadModel();
         return (
-          <>
-            <MetricRow
-              items={[
-                {
-                  label: "Materials below reorder point",
-                  value: `${summary.materialsBelowReorderPoint}`,
-                  detail: material?.sku ?? "Seeded shortage material",
-                  tone: "amber"
-                },
-                {
-                  label: "Jobs blocked by shortage",
-                  value: `${summary.jobsBlockedByShortage}`,
-                  detail: blockedJobs.map((job) => job.jobId).join(", "),
-                  tone: "rose"
-                },
-                {
-                  label: "Open purchase requests",
-                  value: `${summary.openPurchaseRequests}`,
-                  detail: "Submitted procurement work",
-                  tone: "blue"
-                },
-                {
-                  label: "Incoming POs this week",
-                  value: `${summary.incomingPosThisWeek}`,
-                  detail: "Expected supply flow",
-                  tone: "emerald"
-                },
-                {
-                  label: "Reserved inventory value",
-                  value: `$${summary.reservedInventoryValue.toLocaleString()}`,
-                  detail: "Held against active jobs",
-                  tone: "slate"
-                },
-                {
-                  label: "Critical shortages",
-                  value: `${summary.criticalShortages}`,
-                  detail: "Blocked jobs and schedule risk",
-                  tone: "rose"
-                }
-              ]}
-            />
-
-            <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
-              <div className="space-y-4">
-                <RiskAlert
-                  severity="Critical"
-                  title="Job J-2099 is blocked"
-                  description="44 sheets of Aluminum Plate 6061 are required before CNC Mill can begin."
-                  href="/jobs/j-2099/material-impact"
-                  actionLabel="View job impact"
-                />
-
-                <DataTableShell
-                  title="Materials table"
-                  subtitle="Shortage signal and linked jobs are visible before the schedule slips."
-                >
-                  <TinyTable
-                    columns={["SKU", "Material name", "On hand", "Reserved", "Available", "Reorder point", "Shortage", "Supplier", "Affected jobs", "Status", "Action"]}
-                    rows={rows.map((row) => [
-                      <EntityLink href={row.href}>{row.sku}</EntityLink>,
-                      row.name,
-                      `${row.onHand}`,
-                      `${row.reserved}`,
-                      `${row.available}`,
-                      `${row.reorderPoint}`,
-                      <span className="font-semibold text-rose-700">{row.shortage}</span>,
-                      row.supplier,
-                      <div className="flex flex-wrap gap-2">
-                        {row.affectedJobIds.map((jobId) => (
-                          <EntityLink
-                            key={jobId}
-                            href={
-                              jobId === "J-2099"
-                                ? "/jobs/j-2099/material-impact"
-                                : jobId === "J-2035"
-                                  ? "/jobs/j-2035"
-                                  : "/jobs"
-                            }
-                          >
-                            {jobId}
-                          </EntityLink>
-                        ))}
-                      </div>,
-                      <div className="flex flex-wrap gap-2">
-                        <StatusBadge label="Shortage" />
-                        <StatusBadge label="Blocked Job" />
-                      </div>,
-                      <EntityLink href="/jobs/j-2099/material-impact">{row.action}</EntityLink>
-                    ])}
-                  />
-                </DataTableShell>
-              </div>
-
-              <div className="space-y-4">
-                <TimelineShell title="Incoming and purchase request preview" subtitle="The shortage becomes a seeded purchasing record.">
-                  <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <EntityLink href="/purchase-requests/pr-3091">PR-3091</EntityLink>
-                      <StatusBadge label={pr?.status ?? "Submitted"} />
-                    </div>
-                    <div className="grid gap-2 text-sm text-slate-700">
-                      <div>Material: <span className="font-medium text-slate-950">{material?.sku ?? "AL-6061-PLT-0.375"}</span></div>
-                      <div>Quantity: <span className="font-medium text-slate-950">{pr?.quantity ?? 50} sheets</span></div>
-                      <div>Supplier: <span className="font-medium text-slate-950">{pr?.supplier ?? "Midwest Metals Supply"}</span></div>
-                      <div>Linked job: <EntityLink href="/jobs/j-2099/material-impact">J-2099</EntityLink></div>
-                    </div>
-                  </div>
-                </TimelineShell>
-
-                <TimelineShell title="Demo path" subtitle="Next: Purchase Request - PR-3091">
-                  <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-sm leading-6 text-slate-700">
-                      The shortage is resolved by creating a purchase request that keeps traceability tied to the blocked job.
-                    </div>
-                    <Link
-                      href="/purchase-requests/pr-3091"
-                      className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                    >
-                      Continue to PR-3091
-                    </Link>
-                  </div>
-                </TimelineShell>
-              </div>
-            </div>
-          </>
+          <MaterialDashboardView
+            baseJobs={model.baseJobs}
+            baseMaterials={model.baseMaterials}
+            basePurchaseRequests={model.basePurchaseRequests}
+            baseAuditEvents={model.baseAuditEvents}
+            baseMaterialRows={model.baseMaterialRows}
+            baseBlockedJobs={model.baseBlockedJobs}
+            baseReservationBreakdown={model.baseReservationBreakdown}
+            baseSupplierPanel={model.baseSupplierPanel}
+            baseMaterialImpactTimeline={model.baseMaterialImpactTimeline}
+            basePurchaseRequestState={model.basePurchaseRequestState}
+            basePurchaseRequestAuditTrail={model.basePurchaseRequestAuditTrail}
+          />
         );
       }
-
     case "material-al6061":
-      return <MaterialDetailView />;
-
       {
-        const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
-        const rows = getBlockedJobsByMaterialShortage(jobs, materials);
-        const breakdown = getMaterialReservationBreakdown(materials, jobs);
-        const supplier = getMaterialSupplierPanel(materials);
-
+        const model = await getMaterialDetailReadModel("AL-6061-PLT-0.375");
         return (
-          <div className="space-y-4">
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <EntityLink href="/materials/al-6061-plt-0.375">AL-6061-PLT-0.375</EntityLink>
-                    <StatusBadge label="Shortage" />
-                    <StatusBadge label="Blocked Job" />
-                    <SeverityBadge severity="Critical" />
-                  </div>
-                  <div className="grid gap-x-4 gap-y-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-                    <div>Material name: <span className="font-medium text-slate-950">{material?.name ?? "Aluminum Plate 6061, 3/8 inch"}</span></div>
-                    <div>Supplier: <span className="font-medium text-slate-950">{supplier.preferredSupplier}</span></div>
-                    <div>Lead time: <span className="font-medium text-slate-950">{supplier.leadTimeBusinessDays} business days</span></div>
-                    <div>Last updated: <span className="font-medium text-slate-950">{material?.lastUpdated ?? "Today 9:15 AM"}</span></div>
-                  </div>
-                </div>
-                <Link
-                  href="/jobs/j-2099/material-impact"
-                  className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                >
-                  View J-2099 job impact
-                </Link>
-              </div>
-            </div>
-
-            <MetricRow
-              items={[
-                { label: "On hand", value: `${material?.onHand ?? 12} sheets`, detail: "Physical inventory", tone: "blue" },
-                { label: "Reserved", value: `${material?.reserved ?? 8} sheets`, detail: "Held for open jobs", tone: "amber" },
-                { label: "Available", value: `${material?.available ?? 4} sheets`, detail: "Free for new work", tone: "emerald" },
-                { label: "Required by open jobs", value: `${material?.requiredSheets ?? 48} sheets`, detail: "Driven by J-2099", tone: "slate" },
-                { label: "Shortage", value: `${material?.shortage ?? 44} sheets`, detail: "Current gap", tone: "rose" },
-                { label: "Reorder point", value: `${material?.reorderPoint ?? 20} sheets`, detail: "Triggers replenishment", tone: "amber" }
-              ]}
-            />
-
-            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-              <DataTableShell title="Affected jobs" subtitle="Jobs that are blocked, reserved, or at risk because of the shortage.">
-                <TinyTable
-                  columns={["Job", "Customer", "Needs", "Status", "Due date"]}
-                  rows={rows.map((row) => [
-                    <EntityLink href={row.href}>{row.jobId}</EntityLink>,
-                    row.customerName,
-                    `${row.requiredSheets} sheets`,
-                    row.status === "blocked" ? (
-                      <StatusBadge label="Blocked Job" />
-                    ) : row.status === "reserved" ? (
-                      <StatusBadge label="Reserved" />
-                    ) : (
-                      <SeverityBadge severity="Warning" />
-                    ),
-                    row.dueDate
-                  ])}
-                />
-              </DataTableShell>
-
-              <TimelineShell title="Reservation breakdown" subtitle="Where the sheets are currently allocated.">
-                <div className="space-y-3">
-                  {breakdown.map((item) => (
-                    <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
-                      <span className="text-slate-700">{item.label}</span>
-                      <span className="font-medium text-slate-950">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </TimelineShell>
-            </div>
-
-            <TimelineShell title="Supplier panel" subtitle="The material can be replenished from the preferred supplier.">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Preferred supplier</div>
-                  <div className="mt-2 text-sm font-medium text-slate-950">{supplier.preferredSupplier}</div>
-                </div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Contact</div>
-                  <div className="mt-2 text-sm font-medium text-slate-950">{supplier.contact}</div>
-                </div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Lead time</div>
-                  <div className="mt-2 text-sm font-medium text-slate-950">{supplier.leadTimeBusinessDays} business days</div>
-                </div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Last purchase price</div>
-                  <div className="mt-2 text-sm font-medium text-slate-950">${supplier.lastPurchasePrice}/sheet</div>
-                </div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Minimum order quantity</div>
-                  <div className="mt-2 text-sm font-medium text-slate-950">{supplier.minimumOrderQuantity} sheets</div>
-                </div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Suggested order quantity</div>
-                  <div className="mt-2 text-sm font-medium text-slate-950">{supplier.suggestedOrderQuantity} sheets</div>
-                </div>
-              </div>
-            </TimelineShell>
-          </div>
+          <MaterialDetailView
+            baseJobs={model.baseJobs}
+            baseMaterials={model.baseMaterials}
+            basePurchaseRequests={model.basePurchaseRequests}
+            baseAuditEvents={model.baseAuditEvents}
+            baseMaterialRows={model.baseMaterialRows}
+            baseBlockedJobs={model.baseBlockedJobs}
+            baseReservationBreakdown={model.baseReservationBreakdown}
+            baseSupplierPanel={model.baseSupplierPanel}
+            baseMaterialImpactTimeline={model.baseMaterialImpactTimeline}
+            basePurchaseRequestState={model.basePurchaseRequestState}
+            basePurchaseRequestAuditTrail={model.basePurchaseRequestAuditTrail}
+          />
         );
       }
-
     case "job-2099-material":
-      return <MaterialImpactView />;
-
       {
-        const job = getJobById("J-2099", jobs);
-        const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
-        const supplier = getMaterialSupplierPanel(materials);
-        const timeline = getMaterialImpactTimeline(materialImpactTimeline);
-
+        const model = await getMaterialImpactReadModel("J-2099");
         return (
-          <div className="space-y-4">
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <EntityLink href="/jobs/j-2099/material-impact">J-2099</EntityLink>
-                    <StatusBadge label={job?.status ?? "Waiting on Material"} />
-                    <SeverityBadge severity="Critical" />
-                  </div>
-                  <div className="grid gap-x-4 gap-y-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-                    <div>Customer: <span className="font-medium text-slate-950">{job?.customerName ?? "Apex Rail Components"}</span></div>
-                    <div>Part: <span className="font-medium text-slate-950">{job?.part ?? "Mounting Plate Set Rev C"}</span></div>
-                    <div>Quantity: <span className="font-medium text-slate-950">{job?.quantity ?? 120}</span></div>
-                    <div>Due date: <span className="font-medium text-slate-950">{job?.dueDate ?? "within 4 business days"}</span></div>
-                    <div>Risk: <span className="font-medium text-rose-700">{job?.risk ?? "High"}</span></div>
-                    <div>Blocked step: <span className="font-medium text-slate-950">{job?.blockedStep ?? "CNC Mill"}</span></div>
-                    <div>Work center: <span className="font-medium text-slate-950">{job?.workCenter ?? "CNC Mill"}</span></div>
-                    <div>Current status: <span className="font-medium text-slate-950">{job?.status ?? "Waiting on Material"}</span></div>
-                  </div>
-                </div>
-                <Link
-                  href="/purchase-requests/pr-3091"
-                  className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                >
-                  Create purchase request
-                </Link>
-              </div>
-            </div>
-
-            <RiskAlert
-              severity="Critical"
-              title="Production blocked by material shortage"
-              description="The shortage is 44 sheets and CNC Mill cannot start until material receipt clears the queue."
-              href="/purchase-requests/pr-3091"
-              actionLabel="Create purchase request"
-            />
-
-            <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-              <div className="space-y-4">
-                <TimelineShell title="Impact panel" subtitle="Shortage ripples into production readiness.">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Required material</div>
-                      <div className="mt-2 text-sm font-medium text-slate-950">{material?.sku ?? "AL-6061-PLT-0.375"}</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Required quantity</div>
-                      <div className="mt-2 text-sm font-medium text-slate-950">{material?.requiredSheets ?? 48} sheets</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Available quantity</div>
-                      <div className="mt-2 text-sm font-medium text-slate-950">{material?.available ?? 4} sheets</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Shortage</div>
-                      <div className="mt-2 text-sm font-medium text-rose-700">{material?.shortage ?? 44} sheets</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Supplier lead time</div>
-                      <div className="mt-2 text-sm font-medium text-slate-950">{supplier.leadTimeBusinessDays} business days</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Scheduler note</div>
-                      <div className="mt-2 text-sm leading-6 text-slate-700">
-                        CNC slot may need to be moved if material arrives after planned start.
-                      </div>
-                    </div>
-                  </div>
-                </TimelineShell>
-
-                <TimelineShell title="Inventory breakdown" subtitle="Reservation math that explains the blocked job.">
-                  <div className="space-y-3">
-                    {getMaterialReservationBreakdown(materials, jobs).map((item) => (
-                      <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
-                        <span className="text-slate-700">{item.label}</span>
-                        <span className="font-medium text-slate-950">{item.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </TimelineShell>
-              </div>
-
-              <div className="space-y-4">
-                <TimelineShell title="Timeline" subtitle="Production and procurement events leading to the shortage.">
-                  <div className="space-y-3">
-                    {timeline.map((entry) => (
-                      <div key={`${entry.timestamp}-${entry.title}`} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-sm font-semibold text-slate-950">{entry.title}</div>
-                          <SeverityBadge severity={entry.severity} />
-                        </div>
-                        <p className="mt-1 text-sm leading-6 text-slate-600">{entry.detail}</p>
-                        <div className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{entry.timestamp}</div>
-                      </div>
-                    ))}
-                  </div>
-                </TimelineShell>
-
-                <TimelineShell title="Supplier panel" subtitle="The same supplier profile feeds the purchase request screen.">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Preferred supplier</div>
-                      <div className="mt-2 text-sm font-medium text-slate-950">{supplier.preferredSupplier}</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Lead time</div>
-                      <div className="mt-2 text-sm font-medium text-slate-950">{supplier.leadTimeBusinessDays} business days</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Last purchase price</div>
-                      <div className="mt-2 text-sm font-medium text-slate-950">${supplier.lastPurchasePrice}/sheet</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Suggested order quantity</div>
-                      <div className="mt-2 text-sm font-medium text-slate-950">{supplier.suggestedOrderQuantity} sheets</div>
-                    </div>
-                  </div>
-                </TimelineShell>
-              </div>
-            </div>
-          </div>
+          <MaterialImpactView
+            baseJobs={model.baseJobs}
+            baseMaterials={model.baseMaterials}
+            basePurchaseRequests={model.basePurchaseRequests}
+            baseAuditEvents={model.baseAuditEvents}
+            baseMaterialRows={model.baseMaterialRows}
+            baseBlockedJobs={model.baseBlockedJobs}
+            baseReservationBreakdown={model.baseReservationBreakdown}
+            baseSupplierPanel={model.baseSupplierPanel}
+            baseMaterialImpactTimeline={model.baseMaterialImpactTimeline}
+            basePurchaseRequestState={model.basePurchaseRequestState}
+            basePurchaseRequestAuditTrail={model.basePurchaseRequestAuditTrail}
+          />
         );
       }
-
     case "purchase-request":
-      return <PurchaseRequestView />;
-
       {
-        const pr = getPurchaseRequestById("PR-3091", purchaseRequests);
-        const state = getPurchaseRequestState(purchaseRequestState);
-        const auditTrail = getPurchaseRequestAuditEntries(pr3091AuditTrail);
-        const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
-
+        const model = await getPurchaseRequestReadModel("PR-3091");
         return (
-          <div className="space-y-4">
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-                    Purchase request created
-                  </div>
-                  <h3 className="text-[15px] font-semibold text-emerald-950">
-                    Purchase request PR-3091 created and linked to Job J-2099.
-                  </h3>
-                  <p className="max-w-3xl text-sm leading-6 text-emerald-900/80">
-                    The blocked job now has a procurement action attached to it instead of a manual spreadsheet chase.
-                  </p>
-                </div>
-                <StatusBadge label={pr?.status ?? "Submitted"} />
-              </div>
-            </div>
-
-            <MetricRow
-              items={[
-                { label: "Purchase request", value: pr?.id ?? "PR-3091", detail: "Linked to J-2099", tone: "blue" },
-                { label: "Material", value: pr?.materialSku ?? "AL-6061-PLT-0.375", detail: material?.name ?? "Aluminum Plate 6061, 3/8 inch", tone: "slate" },
-                { label: "Quantity", value: `${pr?.quantity ?? 50} sheets`, detail: "Supplier order quantity", tone: "amber" },
-                { label: "Estimated total", value: `$${(pr?.estimatedTotal ?? 9250).toLocaleString()}`, detail: `Unit cost $${pr?.unitCost ?? 185}/sheet`, tone: "emerald" }
-              ]}
-            />
-
-            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-              <DataTableShell title="Purchase request card" subtitle="Seeded purchasing record tied back to the blocked job.">
-                <div className="grid gap-3 p-4 md:grid-cols-2">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Purchase Request</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">{pr?.id ?? "PR-3091"}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Material</div>
-                    <EntityLink href="/materials/al-6061-plt-0.375" className="mt-2 inline-flex">
-                      {pr?.materialSku ?? "AL-6061-PLT-0.375"}
-                    </EntityLink>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Supplier</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">{pr?.supplier ?? "Midwest Metals Supply"}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Quantity</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">{pr?.quantity ?? 50} sheets</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Unit cost</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">${pr?.unitCost ?? 185}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Estimated total</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">${(pr?.estimatedTotal ?? 9250).toLocaleString()}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Linked job</div>
-                    <EntityLink href="/jobs/j-2099/material-impact" className="mt-2 inline-flex">
-                      {pr?.linkedJobId ?? "J-2099"}
-                    </EntityLink>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Buyer</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">{pr?.buyer ?? "Priya Mehta"}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Status</div>
-                    <div className="mt-2"><StatusBadge label={pr?.status ?? "Submitted"} /></div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Priority</div>
-                    <div className="mt-2"><SeverityBadge severity={pr?.priority === "High" ? "Critical" : "Approval"} /></div>
-                  </div>
-                </div>
-              </DataTableShell>
-
-              <TimelineShell title="Before / after state" subtitle="The materials and job state stay traceable through the request.">
-                <div className="space-y-3">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Before</div>
-                    <div className="mt-2 space-y-1 text-sm text-slate-700">
-                      <div>Material status: <span className="font-medium text-slate-950">{state.before.materialStatus}</span></div>
-                      <div>Job J-2099: <span className="font-medium text-slate-950">{state.before.jobStatus}</span></div>
-                      <div>Action needed: <span className="font-medium text-slate-950">{state.before.actionNeeded}</span></div>
-                    </div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">After</div>
-                    <div className="mt-2 space-y-1 text-sm text-slate-700">
-                      <div>Material status: <span className="font-medium text-slate-950">{state.after.materialStatus}</span></div>
-                      <div>Job J-2099: <span className="font-medium text-slate-950">{state.after.jobStatus}</span></div>
-                      <div>Next step: <span className="font-medium text-slate-950">{state.after.nextStep}</span></div>
-                    </div>
-                  </div>
-                </div>
-              </TimelineShell>
-            </div>
-
-            <AuditPanel
-              title="Audit trail"
-              subtitle="Standardized purchasing events link the request back to production readiness."
-              items={auditTrail.map((entry) => ({
-                actor: entry.actor,
-                actorRole: entry.role,
-                event: entry.action,
-                time: entry.timestamp,
-                detail: entry.result,
-                severity: entry.severity,
-                entityHref: entry.entityType === "PurchaseRequest" ? "/purchase-requests/pr-3091" : "/jobs/j-2099/material-impact",
-                entityLabel: entry.entityId,
-                result: entry.result,
-                notes: entry.notes,
-                entityType: entry.entityType
-              }))}
-            />
-
-            <div className="flex justify-end">
-              <Link
-                href="/quotes/q-1003"
-                className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-              >
-                Review high-value quote approval Q-1003
-              </Link>
-            </div>
-          </div>
+          <PurchaseRequestView
+            baseJobs={model.baseJobs}
+            baseMaterials={model.baseMaterials}
+            basePurchaseRequests={model.basePurchaseRequests}
+            baseAuditEvents={model.baseAuditEvents}
+            baseMaterialRows={model.baseMaterialRows}
+            baseBlockedJobs={model.baseBlockedJobs}
+            baseReservationBreakdown={model.baseReservationBreakdown}
+            baseSupplierPanel={model.baseSupplierPanel}
+            baseMaterialImpactTimeline={model.baseMaterialImpactTimeline}
+            basePurchaseRequestState={model.basePurchaseRequestState}
+            basePurchaseRequestAuditTrail={model.basePurchaseRequestAuditTrail}
+          />
         );
       }
-
     case "quotes":
       {
-        const summary = getQuoteSummary(quotes, jobs);
-        const quoteRows = getQuoteRows(quotes);
+        const { summary, quoteRows } = await getQuotesDashboardReadModel();
         const filterChips = ["All", "Draft", "Submitted", "Needs Owner Approval", "Approved", "Expiring Soon"];
 
         return (
@@ -2434,1299 +1508,56 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "quote-1003":
-      return <QuoteDetailView />;
       {
-        const quote = getQuoteById("Q-1003", quotes);
-        const quoteEvents = getAuditEventsByEntity("quote", "Q-1003", auditEvents);
-        const totalCost = (quote?.labor ?? 0) + (quote?.materials ?? 0) + (quote?.outsideServices ?? 0) + (quote?.setupOverhead ?? 0);
+        const readModel = await getQuoteDetailReadModel("Q-1003");
 
         return (
-          <div className="space-y-4">
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <EntityLink href="/quotes/q-1003">Q-1003</EntityLink>
-                    <StatusBadge label={quote?.status ?? "Needs Owner Approval"} />
-                    <SeverityBadge severity="Approval" />
-                  </div>
-                  <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Quote Detail - Q-1003</h1>
-                  <p className="max-w-4xl text-sm leading-6 text-slate-500">
-                    High-value quote for Northline Fabrication. Owner approval is required before conversion.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled
-                    title="Owner approval required before conversion."
-                    className="inline-flex cursor-not-allowed items-center gap-2 rounded-sm border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-medium text-slate-400"
-                  >
-                    Convert to Job
-                  </button>
-                  <Link
-                    href="/approvals"
-                    className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                  >
-                    Open Owner Approval Queue
-                  </Link>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label="Customer" value={quote?.customerName ?? "Northline Fabrication"} detail="Estimator Lena Ortiz" tone="blue" />
-                <MetricCard label="Amount" value={`$${quote?.amount.toLocaleString() ?? "72,500"}`} detail="Threshold $50,000" tone="rose" />
-                <MetricCard label="Valid until" value={quote?.validUntil ?? "21 days from now"} detail="Quote expiration window" tone="amber" />
-                <MetricCard label="Margin" value={`$${quote?.margin.toLocaleString() ?? "6,500"}`} detail={`Total cost $${totalCost.toLocaleString()}`} tone="emerald" />
-              </div>
-            </div>
-
-            <RiskAlert
-              severity="Approval"
-              title="This quote exceeds the $50,000 approval threshold."
-              description="Owner / GM approval is required before it can be converted into a production job."
-              href="/approvals"
-              actionLabel="Open approval queue"
-            />
-
-            <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-              <div className="space-y-4">
-                <DataTableShell title="Cost breakdown" subtitle="Centralized quote economics for Q-1003.">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                      <tr>
-                        <th className="px-4 py-2.5 font-semibold">Component</th>
-                        <th className="px-4 py-2.5 font-semibold">Amount</th>
-                        <th className="px-4 py-2.5 font-semibold">Signal</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {[
-                        ["Labor", quote?.labor ?? 24000, "Submitted"],
-                        ["Materials", quote?.materials ?? 31500, "Approval"],
-                        ["Outside services", quote?.outsideServices ?? 6000, "Warning"],
-                        ["Setup / overhead", quote?.setupOverhead ?? 4500, "Success"],
-                        ["Margin", quote?.margin ?? 6500, "Approval"],
-                        ["Total", quote?.amount ?? 72500, "Critical"]
-                      ].map(([label, amount, severity]) => (
-                        <tr key={label}>
-                          <td className="px-4 py-3 font-medium text-slate-950">{label}</td>
-                          <td className="px-4 py-3 font-mono text-[13px]">${Number(amount).toLocaleString()}</td>
-                          <td className="px-4 py-3">
-                            <SeverityBadge severity={severity as "Info" | "Warning" | "Critical" | "Blocked" | "Approval" | "Automation" | "Success"} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </DataTableShell>
-
-                <DataTableShell title="Routing estimate" subtitle="Production routing carries forward once the quote is approved.">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                      <tr>
-                        <th className="px-4 py-2.5 font-semibold">Operation</th>
-                        <th className="px-4 py-2.5 font-semibold">Work center</th>
-                        <th className="px-4 py-2.5 font-semibold">Estimated hours</th>
-                        <th className="px-4 py-2.5 font-semibold">Machine</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {quoteRoutingEstimateRows.map((step) => (
-                        <tr key={step.operation}>
-                          <td className="px-4 py-3">{step.operation}</td>
-                          <td className="px-4 py-3">{step.workCenter}</td>
-                          <td className="px-4 py-3 font-mono text-[13px]">{step.estimatedHours}h</td>
-                          <td className="px-4 py-3 font-mono text-[13px]">{step.machine}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </DataTableShell>
-
-                <DataTableShell title="Material estimate" subtitle="Availability and shortage are visible before conversion.">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                      <tr>
-                        <th className="px-4 py-2.5 font-semibold">SKU</th>
-                        <th className="px-4 py-2.5 font-semibold">Material</th>
-                        <th className="px-4 py-2.5 font-semibold">Qty</th>
-                        <th className="px-4 py-2.5 font-semibold">Unit cost</th>
-                        <th className="px-4 py-2.5 font-semibold">Extended</th>
-                        <th className="px-4 py-2.5 font-semibold">Availability</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {quoteMaterialEstimateRows.map((material) => (
-                        <tr key={material.sku}>
-                          <td className="px-4 py-3 font-mono text-[13px]">{material.sku}</td>
-                          <td className="px-4 py-3">{material.materialName}</td>
-                          <td className="px-4 py-3">{material.quantity}</td>
-                          <td className="px-4 py-3 font-mono text-[13px]">${material.unitCost}</td>
-                          <td className="px-4 py-3 font-mono text-[13px]">${material.extendedCost.toLocaleString()}</td>
-                          <td className="px-4 py-3">
-                            <StatusBadge label={material.availabilityStatus} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </DataTableShell>
-              </div>
-
-              <div className="space-y-4">
-                <TimelineShell title="Quote summary" subtitle="The seeded quote carries all the important commercial detail.">
-                  <div className="space-y-3">
-                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Approval requirement</div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <StatusBadge label={quote?.status ?? "Needs Owner Approval"} />
-                        <SeverityBadge severity="Approval" />
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">
-                        {quote?.approvalRequiredRole ?? "Owner / GM"} required before production conversion.
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-white p-3">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Margin summary</div>
-                      <div className="mt-2 grid gap-2 text-sm text-slate-700">
-                        <div className="flex items-center justify-between">
-                          <span>Margin</span>
-                          <span className="font-mono text-[13px]">${quote?.margin.toLocaleString() ?? "6,500"}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>Total cost</span>
-                          <span className="font-mono text-[13px]">${totalCost.toLocaleString()}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>Threshold</span>
-                          <span className="font-mono text-[13px]">${quote?.approvalThreshold.toLocaleString() ?? "50,000"}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </TimelineShell>
-
-                <TimelineShell title="Notes and approval history" subtitle="What the estimator captured and what leadership needs to know.">
-                  <div className="space-y-3">
-                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer-facing notes</div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">
-                        {quote?.customerFacingNotes ?? "Customer-facing notes will be shown here."}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Internal notes</div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">
-                        {quote?.internalNotes ?? "Internal notes will be shown here."}
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      {q1003ApprovalHistory.map((entry) => (
-                        <div key={entry.timestamp + entry.title} className="rounded-md border border-slate-200 bg-white p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-semibold text-slate-950">{entry.title}</div>
-                            <span className="text-xs text-slate-500">{entry.timestamp}</span>
-                          </div>
-                          <p className="mt-2 text-sm leading-6 text-slate-600">{entry.detail}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </TimelineShell>
-
-                <AuditPanel
-                  title="Audit events"
-                  subtitle="The approval trail is already recorded in the seeded audit stream."
-                  items={quoteEvents.map((event) => ({
-                    actor: event.actor,
-                    actorRole: event.actorRole,
-                    event: event.title,
-                    time: event.timestamp,
-                    detail: event.detail,
-                    severity: event.severity,
-                    entityHref: "/quotes/q-1003",
-                    entityLabel: event.entityId
-                  }))}
-                />
-              </div>
-            </div>
-          </div>
+          <QuoteDetailView
+            quote={readModel.quote}
+            auditEvents={readModel.auditEvents}
+            approvalHistory={readModel.approvalHistory}
+            routingEstimateRows={readModel.routingEstimateRows}
+            materialEstimateRows={readModel.materialEstimateRows}
+            quoteForm={readModel.quoteForm}
+            conversionRecord={readModel.conversionRecord}
+          />
         );
       }
-
-    case "approvals":
-      return <ApprovalsView />;
-      {
-        const approvalRows = getApprovalQueueRows(quotes);
-        const pendingValue = approvalRows.reduce((sum, row) => sum + row.amount, 0);
-
-        return (
-          <div className="space-y-4">
-            <MetricRow
-              items={[
-                { label: "Quotes awaiting approval", value: `${approvalRows.length}`, detail: "Owner / GM queue", tone: "amber" },
-                { label: "Total value pending approval", value: `$${pendingValue.toLocaleString()}`, detail: "High-value opportunities", tone: "rose" },
-                { label: "Oldest pending approval", value: approvalRows[0]?.validUntil ?? "21 days", detail: "Q-1003 is first in line", tone: "blue" },
-                { label: "High-margin opportunities", value: `${approvalRows.filter((row) => row.margin >= 6000).length}`, detail: "Leadership review worthy", tone: "emerald" },
-                { label: "Expiring soon", value: `${quotes.filter((quote) => quote.expiresSoon).length}`, detail: "Requires quick turnaround", tone: "amber" }
-              ]}
-            />
-
-            <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-              <DataTableShell title="Approval table" subtitle="Owner / GM reviews high-value estimates here.">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                    <tr>
-                      <th className="px-4 py-2.5 font-semibold">Quote</th>
-                      <th className="px-4 py-2.5 font-semibold">Customer</th>
-                      <th className="px-4 py-2.5 font-semibold">Amount</th>
-                      <th className="px-4 py-2.5 font-semibold">Margin</th>
-                      <th className="px-4 py-2.5 font-semibold">Estimator</th>
-                      <th className="px-4 py-2.5 font-semibold">Valid until</th>
-                      <th className="px-4 py-2.5 font-semibold">Risk</th>
-                      <th className="px-4 py-2.5 font-semibold">Reason approval required</th>
-                      <th className="px-4 py-2.5 font-semibold">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {approvalRows.map((row) => (
-                      <tr key={row.quoteId} className={cn(row.highlight ? "bg-amber-50/70" : "bg-white")}>
-                        <td className="px-4 py-3">
-                          <EntityLink href={row.href}>{row.quoteId}</EntityLink>
-                        </td>
-                        <td className="px-4 py-3">{row.customerName}</td>
-                        <td className="px-4 py-3 font-mono text-[13px]">${row.amount.toLocaleString()}</td>
-                        <td className="px-4 py-3 font-mono text-[13px]">${row.margin.toLocaleString()}</td>
-                        <td className="px-4 py-3">{row.estimator}</td>
-                        <td className="px-4 py-3">{row.validUntil}</td>
-                        <td className="px-4 py-3">
-                          <SeverityBadge severity={row.risk === "High" ? "Critical" : row.risk === "Medium" ? "Warning" : "Info"} />
-                        </td>
-                        <td className="px-4 py-3">{row.reasonApprovalRequired}</td>
-                        <td className="px-4 py-3">
-                          <Link
-                            href={row.href}
-                            className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800"
-                          >
-                            {row.action}
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </DataTableShell>
-
-              <TimelineShell title="Approve Quote Q-1003" subtitle="Controlled owner review before conversion.">
-                <div className="space-y-3">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Decision</div>
-                    <div className="mt-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
-                      Approve quote
-                    </div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Owner note</div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      Approved for production conversion. Margin and timeline acceptable.
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Conditions</div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      Scheduler to confirm capacity before release.
-                    </p>
-                  </div>
-                  <RiskAlert
-                    severity="Approval"
-                    title="Approving this quote will allow it to be converted into a production job."
-                    description="This is the last gated step before Job J-2104 and WO-2104 are created."
-                    href="/quotes/q-1003/convert"
-                    actionLabel="Approve Quote"
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
-                    >
-                      Request Revision
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
-                    >
-                      Reject
-                    </button>
-                    <Link
-                      href="/quotes/q-1003/convert"
-                      className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                    >
-                      Approve Quote
-                    </Link>
-                  </div>
-                </div>
-              </TimelineShell>
-            </div>
-          </div>
-        );
-      }
-
     case "quote-convert":
       return <QuoteConversionView />;
+
+    case "approvals":
       {
-        const quote = getQuoteById("Q-1003", quotes);
-        const quoteApproved = getAuditEventsByEntity("quote", "Q-1003", auditEvents);
-        const workOrderEvents = getAuditEventsByEntity("workOrder", "WO-2104", auditEvents);
-        const jobEvents = getAuditEventsByEntity("job", "J-2104", auditEvents);
-        const conversionAuditEvents = [
-          quoteApproved.find((event) => event.eventType === "owner-approved"),
-          quoteApproved.find((event) => event.eventType === "quote-converted"),
-          workOrderEvents[0],
-          jobEvents.find((event) => event.eventType === "routing-generated")
-        ].filter((event): event is NonNullable<typeof event> => Boolean(event));
+        const readModel = await getApprovalsReadModel();
 
-        return (
-          <div className="space-y-4">
-            <RiskAlert
-              severity="Success"
-              title="Quote Q-1003 approved by Owner / GM."
-              description="The quote is now cleared for production conversion and carries forward all seeded routing and material context."
-              href="/customer-service/jobs/j-2035"
-              actionLabel="Generate customer-safe status report"
-            />
-
-            <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-              <div className="space-y-4">
-                <MetricRow
-                  items={[
-                    { label: "Quote status", value: quote?.status === "Converted to Job" ? "Converted to Job" : "Approved", detail: "Approval audit event written", tone: "emerald" },
-                    { label: "Job number", value: q1003ConversionRecord.jobNumber, detail: "Created from the approved quote", tone: "blue" },
-                    { label: "Work order", value: q1003ConversionRecord.workOrder, detail: "Routing and traveler follow", tone: "amber" },
-                    { label: "Scheduler", value: q1003ConversionRecord.scheduler, detail: q1003ConversionRecord.supervisor, tone: "slate" }
-                  ]}
-                />
-
-                <DataTableShell title="Convert Quote Q-1003 to Production Job" subtitle="The seeded conversion state carries the quote into a job and work order.">
-                  <div className="grid gap-3 p-4 md:grid-cols-2">
-                    {[
-                      ["Quote", q1003ConversionRecord.quoteId],
-                      ["Customer", q1003ConversionRecord.customerName],
-                      ["Job number", q1003ConversionRecord.jobNumber],
-                      ["Work order", q1003ConversionRecord.workOrder],
-                      ["Routing template", q1003ConversionRecord.routingTemplate],
-                      ["Initial material reservation", q1003ConversionRecord.initialMaterialReservation],
-                      ["Scheduler", q1003ConversionRecord.scheduler],
-                      ["Supervisor", q1003ConversionRecord.supervisor]
-                    ].map(([label, value]) => (
-                      <div key={label} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</div>
-                        <div className="mt-2 text-sm font-medium text-slate-950">{value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="border-t border-slate-200 px-4 py-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Generated routing preview</div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {q1003ConversionRecord.generatedRouting.map((step) => (
-                        <StatusBadge key={step} label={step} />
-                      ))}
-                    </div>
-                    <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
-                      Converting this quote will create a job, work order, initial routing, and material reservation tasks.
-                    </div>
-                  </div>
-                </DataTableShell>
-
-                <DataTableShell title="Post-conversion state" subtitle="The approved quote becomes executable production work.">
-                  <div className="grid gap-3 p-4 md:grid-cols-2">
-                    {[
-                      ["Job", q1003ConversionRecord.jobNumber],
-                      ["Work order", q1003ConversionRecord.workOrder],
-                      ["Source quote", q1003ConversionRecord.quoteId],
-                      ["Customer", q1003ConversionRecord.customerName],
-                      ["Routing", "Generated"],
-                      ["Initial material reservation", "Pending"],
-                      ["Assigned scheduler", q1003ConversionRecord.scheduler],
-                      ["Assigned supervisor", q1003ConversionRecord.supervisor]
-                    ].map(([label, value]) => (
-                      <div key={label} className="rounded-md border border-slate-200 bg-white p-3">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</div>
-                        <div className="mt-2 text-sm font-medium text-slate-950">{value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="border-t border-slate-200 px-4 py-4">
-                    <div className="flex flex-wrap gap-2">
-                      <StatusBadge label="Converted to Job" />
-                      <StatusBadge label="Approved" />
-                      <SeverityBadge severity="Automation" />
-                    </div>
-                  </div>
-                </DataTableShell>
-
-                <TimelineShell title="Permission reminder" subtitle="Role-based guidance for the quote-to-job transition.">
-                  <Checklist
-                    items={[
-                      { label: "Estimator can create and submit quotes", state: "Approved" },
-                      { label: "Owner / GM can approve high-value quotes", state: "Approval" },
-                      { label: "Operator cannot approve quotes or view sensitive margin details", state: "Blocked" },
-                      { label: "Scheduler receives the job only after approval and conversion", state: "Automation" }
-                    ]}
-                  />
-                </TimelineShell>
-              </div>
-
-              <div className="space-y-4">
-                <AuditPanel
-                  title="Audit panel"
-                  subtitle="Standardized conversion events show the end-to-end trace."
-                  items={conversionAuditEvents.map((event) => ({
-                    actor: event.actor,
-                    actorRole: event.actorRole,
-                    event: event.title,
-                    time: event.timestamp,
-                    detail: event.detail,
-                    severity: event.severity,
-                    entityHref:
-                      event.entityType === "quote"
-                        ? "/quotes/q-1003"
-                        : event.entityType === "workOrder"
-                          ? "/quotes/q-1003/convert"
-                          : "/quotes/q-1003/convert",
-                    entityLabel: event.entityId,
-                    result: event.detail,
-                    notes: event.detail,
-                    entityType: event.entityType
-                  }))}
-                />
-
-                <TimelineShell title="Next step" subtitle="Continue the founder demo into the customer-safe reporting flow.">
-                  <Link
-                    href="/customer-service/jobs/j-2035"
-                    className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                  >
-                    Generate customer-safe status report
-                  </Link>
-                </TimelineShell>
-              </div>
-            </div>
-          </div>
-        );
+        return <ApprovalsView baseQuotes={readModel.quotes} />;
       }
 
     case "customer-service":
-      return <CustomerServiceCommandCenterView />;
       {
-        const summary = getCustomerServiceSummary(jobs, reports);
-        const riskQueue = getCustomerRiskQueue(jobs);
-        const customerCards = customers.map((customer) => customer.name);
-
-        return (
-          <div className="space-y-4">
-            <MetricRow
-              items={[
-                { label: "Customer status requests today", value: `${summary.customerStatusRequestsToday}`, detail: "Answer questions without disrupting the floor", tone: "blue" },
-                { label: "Jobs due this week", value: `${summary.jobsDueThisWeek}`, detail: "Promised work still in flight", tone: "amber" },
-                { label: "Jobs at risk", value: `${summary.jobsAtRisk}`, detail: "Watch or higher risk", tone: "rose" },
-                { label: "Jobs ready to ship", value: `${summary.jobsReadyToShip}`, detail: "Customer-safe delivery queue", tone: "emerald" },
-                { label: "Jobs waiting on material", value: `${summary.jobsWaitingOnMaterial}`, detail: "Need procurement or replan", tone: "amber" },
-                { label: "Reports generated today", value: `${summary.reportsGeneratedToday}`, detail: "Customer-safe updates prepared", tone: "emerald" }
-              ]}
-            />
-
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
-              <div className="space-y-2">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">Customer Service Representative</div>
-                <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Customer Service Command Center</h1>
-                <p className="max-w-4xl text-sm leading-6 text-slate-500">
-                  Now we move from internal operations to customer communication. Customer Service can answer status questions quickly without interrupting the shop floor.
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Search-first layout</div>
-              <div className="mt-2 rounded-md border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">
-                Search by job, quote, customer, PO, or part
-              </div>
-            </div>
-
-            <DataTableShell title="Customer risk queue" subtitle="Customer-safe statuses are derived from the operational source of truth.">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                  <tr>
-                    <th className="px-4 py-2.5 font-semibold">Job</th>
-                    <th className="px-4 py-2.5 font-semibold">Customer</th>
-                    <th className="px-4 py-2.5 font-semibold">Customer PO</th>
-                    <th className="px-4 py-2.5 font-semibold">Part</th>
-                    <th className="px-4 py-2.5 font-semibold">Current internal status</th>
-                    <th className="px-4 py-2.5 font-semibold">Due date</th>
-                    <th className="px-4 py-2.5 font-semibold">Customer-facing status</th>
-                    <th className="px-4 py-2.5 font-semibold">Internal blocker</th>
-                    <th className="px-4 py-2.5 font-semibold">Last update</th>
-                    <th className="px-4 py-2.5 font-semibold">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {riskQueue.map((row) => (
-                    <tr key={row.jobId} className={cn(row.highlight ? "bg-blue-50/70" : "bg-white")}>
-                      <td className="px-4 py-3">
-                        <EntityLink href={row.href}>{row.jobId}</EntityLink>
-                      </td>
-                      <td className="px-4 py-3">{row.customerName}</td>
-                      <td className="px-4 py-3 font-mono text-[13px]">{row.customerPo}</td>
-                      <td className="px-4 py-3">{row.part}</td>
-                      <td className="px-4 py-3">
-                        <StatusBadge label={row.currentInternalStatus} />
-                      </td>
-                      <td className="px-4 py-3">{row.dueDate}</td>
-                      <td className="px-4 py-3">
-                        <SeverityBadge severity={row.customerFacingStatus === "On Track" ? "Success" : row.customerFacingStatus === "Watch" ? "Warning" : "Critical"} />
-                        <span className="ml-2 text-sm text-slate-600">{row.customerFacingStatus}</span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{row.internalBlocker}</td>
-                      <td className="px-4 py-3 text-slate-600">{row.lastUpdate}</td>
-                      <td className="px-4 py-3">
-                        <Link
-                          href={row.href}
-                          className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800"
-                        >
-                          {row.jobId === "J-2035" ? "View status" : "View"}
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </DataTableShell>
-
-            <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-              <DataTableShell title="Recent customer records" subtitle="MetroFab is the demo target for the customer-service walkthrough.">
-                <div className="space-y-2 p-4">
-                  {customerCards.map((customer) => (
-                    <div key={customer} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <span className="text-sm font-medium text-slate-950">{customer}</span>
-                      {customer === "MetroFab Industries" ? (
-                        <Link
-                          href="/customers/metrofab-industries"
-                          className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
-                        >
-                          Open customer
-                        </Link>
-                      ) : (
-                        <StatusBadge label="Active" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </DataTableShell>
-
-              <TimelineShell title="Demo path" subtitle="Step 11 of 13 - Customer Status Report - J-2035">
-                <div className="space-y-3">
-                  <RiskAlert
-                    severity="Info"
-                    title="View customer-safe status for J-2035"
-                    description="This route strips out sensitive internal detail while preserving accurate delivery communication."
-                    href="/customer-service/jobs/j-2035"
-                    actionLabel="View customer-safe status"
-                  />
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
-                    Customer Service can answer status questions quickly without interrupting the shop floor.
-                  </div>
-                </div>
-              </TimelineShell>
-            </div>
-          </div>
-        );
+        const model = await getCustomerServiceReadModel();
+        return <CustomerServiceCommandCenterView {...model} />;
       }
-
     case "customer-metrofab":
-      return <CustomerDetailView />;
       {
-        const customerJobs = jobs.filter((job) => job.customerSlug === "metrofab-industries" || job.id === "J-2035");
-
-        return (
-          <div className="space-y-4">
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CustomerSafeViewLabel />
-                    <StatusBadge label={metrofabCustomerProfile.status} />
-                  </div>
-                  <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Customer Detail - MetroFab Industries</h1>
-                  <div className="grid gap-x-4 gap-y-1 text-sm text-slate-600 md:grid-cols-2">
-                    <div>Account contact: <span className="font-medium text-slate-950">{metrofabCustomerProfile.accountContact}</span></div>
-                    <div>Email: <span className="font-medium text-slate-950">{metrofabCustomerProfile.email}</span></div>
-                    <div>Phone: <span className="font-medium text-slate-950">{metrofabCustomerProfile.phone}</span></div>
-                    <div>Open jobs: <span className="font-medium text-slate-950">{metrofabCustomerProfile.openJobs}</span></div>
-                    <div>Open quotes: <span className="font-medium text-slate-950">{metrofabCustomerProfile.openQuotes}</span></div>
-                    <div>On-time delivery rate: <span className="font-medium text-slate-950">{metrofabCustomerProfile.onTimeDeliveryRate}%</span></div>
-                  </div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <MetricCard label="Customer status" value={metrofabCustomerProfile.status} detail="Active account" tone="emerald" />
-                  <MetricCard label="Open jobs" value={`${metrofabCustomerProfile.openJobs}` } detail="Production and support" tone="blue" />
-                  <MetricCard label="Open quotes" value={`${metrofabCustomerProfile.openQuotes}` } detail="Commercial pipeline" tone="amber" />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {metrofabCustomerProfile.tabs.map((tab, index) => (
-                <span
-                  key={tab}
-                  className={cn(
-                    "rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em]",
-                    index === 0 ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-slate-50 text-slate-600"
-                  )}
-                >
-                  {tab}
-                </span>
-              ))}
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-              <DataTableShell title="Open jobs" subtitle="Active MetroFab jobs available to Customer Service.">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                    <tr>
-                      <th className="px-4 py-2.5 font-semibold">Job</th>
-                      <th className="px-4 py-2.5 font-semibold">Customer PO</th>
-                      <th className="px-4 py-2.5 font-semibold">Part</th>
-                      <th className="px-4 py-2.5 font-semibold">Quantity</th>
-                      <th className="px-4 py-2.5 font-semibold">Current status</th>
-                      <th className="px-4 py-2.5 font-semibold">Due date</th>
-                      <th className="px-4 py-2.5 font-semibold">Risk</th>
-                      <th className="px-4 py-2.5 font-semibold">Last update</th>
-                      <th className="px-4 py-2.5 font-semibold">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {customerJobs.map((job) => (
-                      <tr key={job.id} className={job.id === "J-2035" ? "bg-blue-50/70" : "bg-white"}>
-                        <td className="px-4 py-3">
-                          <EntityLink href="/customer-service/jobs/j-2035">{job.id}</EntityLink>
-                        </td>
-                        <td className="px-4 py-3 font-mono text-[13px]">{job.customerPo}</td>
-                        <td className="px-4 py-3">{job.part}</td>
-                        <td className="px-4 py-3">{job.quantity}</td>
-                        <td className="px-4 py-3">
-                          <StatusBadge label={job.id === "J-2035" ? "In Production" : job.status} />
-                        </td>
-                        <td className="px-4 py-3">{job.dueDate}</td>
-                        <td className="px-4 py-3">
-                          <SeverityBadge severity={job.risk === "None" ? "Info" : job.risk === "Low" ? "Success" : job.risk === "Watch" ? "Warning" : job.risk === "High" ? "Critical" : "Blocked"} />
-                        </td>
-                        <td className="px-4 py-3">{job.id === "J-2035" ? "Updated 12 min ago" : "Updated recently"}</td>
-                        <td className="px-4 py-3">
-                          <Link
-                            href="/customer-service/jobs/j-2035"
-                            className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800"
-                          >
-                            View customer-safe status
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </DataTableShell>
-
-              <TimelineShell title="Status reports" subtitle="Previous and generated report preview.">
-                <div className="space-y-3">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer Job Status Report</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">J-2035</div>
-                    <div className="mt-1 text-sm text-slate-600">Prepared by Customer Service</div>
-                    <div className="mt-1 text-sm text-slate-600">Status: Generated</div>
-                    <div className="mt-1 text-sm text-slate-600">Last update: Today 3:01 PM</div>
-                    <div className="mt-3">
-                      <Link
-                        href="/reports/customer-status/j-2035"
-                        className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
-                      >
-                        Open report
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </TimelineShell>
-            </div>
-          </div>
-        );
+        const model = await getCustomerDetailReadModel("metrofab-industries");
+        return <CustomerDetailView {...model} />;
       }
-
     case "customer-service-job":
-      return <CustomerServiceJobView />;
       {
-        const customerSafe = getCustomerSafeJobStatus("J-2035", jobs);
-        const customerSafeSummary =
-          customerSafe?.summary ??
-          "This view hides margin, internal cost, operator blame, detailed scrap blame, supervisor-only notes, and internal approval comments.";
-
-        return (
-          <div className="space-y-4">
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <EntityLink href="/jobs/j-2035">J-2035</EntityLink>
-                    <CustomerSafeViewLabel />
-                    <StatusBadge label="On Track" />
-                  </div>
-                  <p className="max-w-3xl text-sm leading-6 text-slate-500">
-                    {customerSafeSummary}
-                  </p>
-                  <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Customer-Facing Job Status - J-2035</h1>
-                  <div className="grid gap-x-4 gap-y-1 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-                    <div>Customer: <span className="font-medium text-slate-950">MetroFab Industries</span></div>
-                    <div>Customer PO: <span className="font-medium text-slate-950">PO-8841</span></div>
-                    <div>Part: <span className="font-medium text-slate-950">Bracket Set Rev A</span></div>
-                    <div>Quantity: <span className="font-medium text-slate-950">500</span></div>
-                    <div>Due date: <span className="font-medium text-slate-950">Friday</span></div>
-                    <div>Customer-facing status: <span className="font-medium text-slate-950">{customerSafe?.summary ? "On Track" : "On Track"}</span></div>
-                    <div>Internal status: <span className="font-medium text-slate-950">{customerSafe?.status ?? "In Production"}</span></div>
-                    <div>Current routing step: <span className="font-medium text-slate-950">Bend</span></div>
-                    <div>Work center: <span className="font-medium text-slate-950">Press Brake</span></div>
-                    <div>Progress: <span className="font-medium text-slate-950">62%</span></div>
-                  </div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <MetricCard label="Customer-facing status" value="On Track" detail="Safe to share" tone="emerald" />
-                  <MetricCard label="Internal status" value="In Production" detail="Operational record" tone="blue" />
-                  <MetricCard label="Progress" value="62%" detail="Bend in progress" tone="amber" />
-                </div>
-              </div>
-            </div>
-
-            <TimelineShell title="Customer-safe view" subtitle="This view hides margin, internal cost, operator blame, supervisor-only notes, and sensitive quality details.">
-              <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
-                This view hides margin, internal cost, operator blame, supervisor-only notes, and sensitive quality details.
-              </div>
-              <div className="space-y-2">
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Quote approved</div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Work order released</div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Material reserved</div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Cutting complete</div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Bending in progress</div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Welding pending</div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Finishing pending</div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Quality inspection pending</div>
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Packing and shipment pending</div>
-              </div>
-            </TimelineShell>
-
-            <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-              <TimelineShell title="Customer update summary" subtitle="Short, accurate communication for MetroFab Industries.">
-                <div className="space-y-3">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
-                    <div className="font-semibold text-slate-950">Current status</div>
-                    <p className="mt-1">In production</p>
-                    <div className="mt-3 font-semibold text-slate-950">Next milestone</div>
-                    <p className="mt-1">Welding</p>
-                    <div className="mt-3 font-semibold text-slate-950">Expected completion</div>
-                    <p className="mt-1">On schedule</p>
-                    <div className="mt-3 font-semibold text-slate-950">Shipping readiness</div>
-                    <p className="mt-1">Pending final quality inspection</p>
-                  </div>
-                <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
-                  Your order is currently in production and remains on schedule. The bending step is in progress, with welding and final inspection scheduled next.
-                </div>
-              </div>
-            </TimelineShell>
-
-              <TimelineShell title="Hidden internal data reminder" subtitle="Do not expose sensitive shop-floor detail.">
-                <div className="space-y-2 text-sm text-slate-700">
-                  {[
-                    "Margin",
-                    "Internal cost",
-                    "Operator blame",
-                    "Detailed scrap blame",
-                    "Supervisor-only notes",
-                    "Internal approval comments"
-                  ].map((item) => (
-                    <div key={item} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </TimelineShell>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
-                Copy customer update
-              </button>
-              <Link href="/reports/customer-status/j-2035" className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800">
-                Generate status report
-              </Link>
-              <button type="button" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
-                Email report
-              </button>
-              <Link href="/reports/customer-status/j-2035/print" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
-                Print report
-              </Link>
-              <Link href="/jobs/j-2035" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
-                View internal job detail
-              </Link>
-            </div>
-          </div>
-        );
+        const model = await getCustomerSafeJobStatusReadModel("J-2035");
+        return <CustomerServiceJobView {...model} />;
       }
-
     case "customer-report":
-      return <CustomerReportView />;
       {
-        const customerReport = getCustomerStatusReports(customerStatusReport, customerSafeTimeline);
-
-        return (
-          <div className="space-y-4">
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
-              <div className="space-y-2">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">Generated report status</div>
-                <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Customer Status Report - J-2035</h1>
-                <p className="max-w-4xl text-sm leading-6 text-slate-500">
-                  This report gives Customer Service a professional, customer-safe way to communicate accurate status without exposing sensitive internal operations.
-                </p>
-                <div className="text-sm text-slate-600">
-                  Report saved under <span className="font-medium text-slate-950">{customerReport.report.reportSavedTo}</span>
-                </div>
-                <div className="text-sm text-slate-600">
-                  Last customer update timestamp: <span className="font-medium text-slate-950">{customerReport.report.preparedTimestamp}</span>
-                </div>
-              </div>
-            </div>
-
-            <PrintHeader
-              title="Customer Status Report - J-2035"
-              subtitle="Report assembled from the operational source of truth and simplified for customer sharing."
-            />
-
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 print:border-slate-300">
-              Company Header Placeholder
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-              <div className="space-y-4">
-                <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    <MetricCard label="Customer" value={customerReport.report.customer} detail={customerReport.report.contact} tone="blue" />
-                    <MetricCard label="Current status" value={customerReport.report.currentStatus} detail={customerReport.report.customerFacingStatus} tone="emerald" />
-                    <MetricCard label="Progress" value={`${customerReport.report.progress}%`} detail="Customer-safe" tone="amber" />
-                    <MetricCard label="Next milestone" value={customerReport.report.nextMilestone} detail="Welding is next" tone="slate" />
-                    <MetricCard label="Shipment readiness" value={customerReport.report.shipmentReadiness} detail="Pending inspection" tone="rose" />
-                    <MetricCard label="Prepared by" value={customerReport.report.preparedBy} detail={customerReport.report.preparedTimestamp} tone="blue" />
-                  </div>
-                </div>
-
-                <TimelineShell title="Customer-safe timeline" subtitle="Shared from the same operational source of truth, but without internal detail.">
-                  <div className="space-y-2">
-                    {customerReport.timeline.map((item) => (
-                      <div key={item.title} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                        <div>
-                          <div className="text-sm font-medium text-slate-950">{item.title}</div>
-                          <div className="text-sm text-slate-600">{item.detail}</div>
-                        </div>
-                        <SeverityBadge severity={item.severity} />
-                      </div>
-                    ))}
-                  </div>
-                </TimelineShell>
-
-                <TimelineShell title="Customer-safe message" subtitle="What Customer Service can send with confidence.">
-                  <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
-                    {customerReport.report.message}
-                  </div>
-                </TimelineShell>
-              </div>
-
-              <AuditPanel
-                title="Audit preview"
-                subtitle="Standardized event from customer report generation."
-                items={[
-                  {
-                    actor: "Customer Service",
-                    actorRole: "Customer Service Representative",
-                    event: "Generated customer status report",
-                    time: customerReport.report.preparedTimestamp,
-                    detail: "Customer-facing report created",
-                    severity: "Info",
-                    entityHref: "/customer-service/jobs/j-2035",
-                    entityLabel: "J-2035",
-                    result: "Customer-facing report created",
-                    notes: "Report saved to MetroFab Industries customer record",
-                    entityType: "Job"
-                  }
-                ]}
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Link href="/reports/customer-status/j-2035/print" className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800">
-                Print report
-              </Link>
-              <Link href="/audit" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
-                View full audit trail
-              </Link>
-              <Link href="/customer-service/jobs/j-2035" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
-                Back to customer-safe status
-              </Link>
-            </div>
-          </div>
-        );
+        const model = await getCustomerStatusReportReadModel("J-2035");
+        return <CustomerReportView {...model} />;
       }
-
     case "customer-report-print":
-      return <CustomerReportPrintView />;
       {
-        const customerReport = customerStatusReport;
-
-        return (
-          <div className="space-y-4">
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none print:border-0 print:p-0">
-              <div className="flex items-center justify-between gap-4 print:hidden">
-                <CustomerSafeViewLabel />
-                <div className="flex items-center gap-2">
-                  <PrintButton />
-                  <Link href="/reports/customer-status/j-2035" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
-                    Back to report preview
-                  </Link>
-                  <Link href="/audit" className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent">
-                    View audit trail
-                  </Link>
-                </div>
-              </div>
-
-              <PrintHeader
-                title="Customer Job Status Report"
-                subtitle="MetroFab Industries - customer-safe status summary"
-              />
-
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <MetricCard label="Customer" value={customerReport.customer} detail={customerReport.contact} tone="slate" />
-                <MetricCard label="Job" value={customerReport.jobId} detail={customerReport.customerPo} tone="blue" />
-                <MetricCard label="Current status" value={customerReport.currentStatus} detail={customerReport.customerFacingStatus} tone="emerald" />
-                <MetricCard label="Progress" value={`${customerReport.progress}%`} detail="Customer-safe" tone="amber" />
-                <MetricCard label="Next milestone" value={customerReport.nextMilestone} detail="Welding is next" tone="slate" />
-                <MetricCard label="Prepared by" value={customerReport.preparedBy} detail={customerReport.preparedTimestamp} tone="blue" />
-              </div>
-
-              <div className="mt-4 rounded-md border border-slate-200 bg-white p-4 print:border-slate-300">
-                <div className="grid gap-3 md:grid-cols-2">
-                  {[
-                    ["Customer", customerReport.customer],
-                    ["Contact", customerReport.contact],
-                    ["Job", customerReport.jobId],
-                    ["Customer PO", customerReport.customerPo],
-                    ["Part", customerReport.part],
-                    ["Quantity", `${customerReport.quantity}`],
-                    ["Due date", customerReport.dueDate],
-                    ["Current status", customerReport.currentStatus],
-                    ["Customer-facing status", customerReport.customerFacingStatus],
-                    ["Progress", `${customerReport.progress}%`],
-                    ["Next milestone", customerReport.nextMilestone],
-                    ["Shipment readiness", customerReport.shipmentReadiness],
-                    ["Prepared by", customerReport.preparedBy],
-                    ["Prepared timestamp", customerReport.preparedTimestamp]
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</div>
-                      <div className="mt-2 text-sm font-medium text-slate-950">{value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <TimelineShell title="Customer-safe timeline" subtitle="Printed report keeps the communication aligned and readable.">
-                <div className="space-y-2">
-                  {customerSafeTimeline.map((item) => (
-                    <div key={item.title} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <div>
-                        <div className="text-sm font-medium text-slate-950">{item.title}</div>
-                        <div className="text-sm text-slate-600">{item.detail}</div>
-                      </div>
-                      <SeverityBadge severity={item.severity} />
-                    </div>
-                  ))}
-                </div>
-              </TimelineShell>
-
-              <div className="mt-4 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
-                {customerReport.message}
-              </div>
-
-              <PrintFooter />
-            </div>
-          </div>
-        );
+        const model = await getPrintableCustomerReportReadModel("J-2035");
+        return <CustomerReportPrintView {...model} />;
       }
-
-    case "audit":
-      return <AuditTrailView />;
-      {
-        const founderAuditEvents = auditEvents.filter((event) => event.id !== 16);
-        const summary = getAuditSummary(founderAuditEvents);
-        const auditRows = getAuditTimelineRows(founderAuditEvents);
-        const quickFilters = getAuditEntityQuickFilters();
-
-        return (
-          <div className="space-y-4">
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <InternalViewLabel />
-                  <StatusBadge label="Full Traceability" />
-                </div>
-                <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Audit Trail</h1>
-                <p className="max-w-4xl text-sm leading-6 text-slate-500">
-                  Complete operational history across quotes, jobs, materials, quality, customer reports, and system events.
-                </p>
-              </div>
-            </div>
-
-            <MetricRow
-              items={[
-                { label: "Audit events today", value: `${summary.auditEventsToday}`, detail: "Traceability already captured", tone: "blue" },
-                { label: "Events requiring review", value: `${summary.eventsRequiringReview}`, detail: "Approvals and escalations", tone: "amber" },
-                { label: "User actions logged", value: `${summary.userActionsLogged}`, detail: "Human activity recorded", tone: "emerald" },
-                { label: "System automations logged", value: `${summary.systemAutomationsLogged}`, detail: "Workflow and orchestration", tone: "slate" },
-                { label: "Exports generated", value: `${summary.exportsGenerated}`, detail: "Traveler and report outputs", tone: "blue" },
-                { label: "Compliance-ready records", value: `${summary.complianceReadyRecords}`, detail: "A complete founder trail", tone: "rose" }
-              ]}
-            />
-
-            <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-              <TimelineShell title="Filters" subtitle="Static controls for the audit log.">
-                <div className="grid gap-3 md:grid-cols-2">
-                  {[
-                    "Date range",
-                    "Actor",
-                    "Role",
-                    "Entity type",
-                    "Entity ID",
-                    "Action type",
-                    "Severity",
-                    "Workflow",
-                    "Search audit log"
-                  ].map((label) => (
-                    <label key={label} className="space-y-1.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</span>
-                      <input
-                        type="text"
-                        readOnly
-                        value={label === "Search audit log" ? "Search audit log" : "All"}
-                        className="w-full rounded-sm border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400"
-                      />
-                    </label>
-                  ))}
-                </div>
-                <div className="mt-4">
-                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    Entity quick filters
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {quickFilters.map((filter) => (
-                      <button
-                        key={filter.label}
-                        type="button"
-                        className="rounded-sm border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </TimelineShell>
-
-              <DataTableShell title="Founder audit timeline" subtitle="All 15 founder demo events, in chronological trace order.">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                      <tr>
-                        <th className="px-4 py-2.5 font-semibold">Timestamp</th>
-                        <th className="px-4 py-2.5 font-semibold">Actor</th>
-                        <th className="px-4 py-2.5 font-semibold">Role</th>
-                        <th className="px-4 py-2.5 font-semibold">Action</th>
-                        <th className="px-4 py-2.5 font-semibold">Entity type</th>
-                        <th className="px-4 py-2.5 font-semibold">Entity ID</th>
-                        <th className="px-4 py-2.5 font-semibold">Result</th>
-                        <th className="px-4 py-2.5 font-semibold">Notes</th>
-                        <th className="px-4 py-2.5 font-semibold">Severity</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {auditRows.map((row) => (
-                        <tr key={`${row.timestamp}-${row.action}`} className="align-top">
-                          <td className="px-4 py-3 text-slate-700">{row.timestamp}</td>
-                          <td className="px-4 py-3 font-medium text-slate-950">{row.actor}</td>
-                          <td className="px-4 py-3 text-slate-700">{row.actorRole}</td>
-                          <td className="px-4 py-3 text-slate-700">{row.action}</td>
-                          <td className="px-4 py-3 text-slate-700">{row.entityType}</td>
-                          <td className="px-4 py-3">
-                            <EntityLink href={row.href}>{row.entityId}</EntityLink>
-                          </td>
-                          <td className="px-4 py-3 text-slate-700">{row.result}</td>
-                          <td className="px-4 py-3 text-slate-600">{row.notes}</td>
-                          <td className="px-4 py-3">
-                            <SeverityBadge severity={row.severity} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </DataTableShell>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 shadow-none">
-              <div className="text-sm text-slate-600">
-                The trail spans quotes, jobs, quality, purchasing, customer communication, and system automation.
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent/30 hover:text-accent"
-                >
-                  Export Audit CSV
-                </button>
-                <Link
-                  href="/audit/jobs/j-2035"
-                  className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                >
-                  View entity timeline
-                </Link>
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <Link
-                href="/audit/jobs/j-2035"
-                className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-              >
-                View J-2035 entity timeline
-              </Link>
-            </div>
-          </div>
-        );
-      }
-
-    case "audit-job":
-      return <EntityTimelineView />;
-      {
-        const entityTimeline = getJ2035EntityTimeline();
-        const auditRecords = auditEvents.filter((event) =>
-          [
-            "job-moved-production",
-            "traveler-printed",
-            "customer-report-generated",
-            "customer-report-saved"
-          ].includes(event.eventType)
-        );
-
-        return (
-          <div className="space-y-4">
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <EntityLink href="/jobs/j-2035">J-2035</EntityLink>
-                  <StatusBadge label="In Production" />
-                  <StatusBadge label="On Track" />
-                </div>
-                <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Entity Timeline — J-2035</h1>
-                <p className="max-w-4xl text-sm leading-6 text-slate-500">
-                  Job-level lineage showing the linked quote, production release, traveler, customer-safe report, and final audit proof.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-              <TimelineShell title="Linked entities" subtitle="Everything points back to the same production record.">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Work order</div>
-                    <EntityLink href="/output/work-order-traveler/j-2035" className="mt-2 inline-flex">
-                      WO-2035
-                    </EntityLink>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">MetroFab Industries</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer PO</div>
-                    <div className="mt-2 text-sm font-medium text-slate-950">PO-8841</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Traveler</div>
-                    <EntityLink href="/output/work-order-traveler/j-2035" className="mt-2 inline-flex">
-                      Work Order Traveler
-                    </EntityLink>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 md:col-span-2">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer report</div>
-                    <EntityLink href="/reports/customer-status/j-2035" className="mt-2 inline-flex">
-                      Customer Job Status Report
-                    </EntityLink>
-                  </div>
-                </div>
-              </TimelineShell>
-
-              <TimelineShell title="Timeline events" subtitle="Lineage from approval through customer communication.">
-                <div className="space-y-3">
-                  {entityTimeline.map((item) => (
-                    <div key={`${item.timestamp}-${item.title}`} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-slate-950">{item.title}</div>
-                        <SeverityBadge severity={item.severity} />
-                      </div>
-                      <p className="mt-1 text-sm leading-6 text-slate-600">{item.detail}</p>
-                      <div className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
-                        {item.timestamp}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </TimelineShell>
-            </div>
-
-            <AuditPanel
-              title="Audit records"
-              subtitle="Filtered job events for the J-2035 lineage."
-              items={auditRecords.map((event) => ({
-                actor: event.actor,
-                actorRole: event.actorRole,
-                event: event.title,
-                time: event.timestamp,
-                detail: event.detail,
-                severity: event.severity,
-                entityHref:
-                  event.entityType === "workOrder"
-                    ? "/output/work-order-traveler/j-2035"
-                    : event.entityType === "report"
-                      ? "/reports/customer-status/j-2035"
-                      : "/jobs/j-2035",
-                entityLabel: event.entityId,
-                result: event.detail,
-                notes: event.detail,
-                entityType: event.entityType
-              }))}
-            />
-
-            <div className="flex justify-end">
-              <Link
-                href="/demo/summary"
-                className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-              >
-                View final demo summary
-              </Link>
-            </div>
-          </div>
-        );
-      }
-
     case "demo-summary":
       {
         const pillars = getFinalValuePillars();
@@ -3831,7 +1662,7 @@ function routeBlocks(routeKey: RouteKey) {
   }
 }
 
-export function RoutePage({ routeKey }: { routeKey: RouteKey }) {
+export async function RoutePage({ routeKey }: { routeKey: RouteKey }) {
   const meta = routeMeta[routeKey];
 
   return (
@@ -3856,7 +1687,10 @@ export function RoutePage({ routeKey }: { routeKey: RouteKey }) {
           "Phase 1 keeps the record structure and visual language in place while the actual workflow logic is built later."}
       </PresenterNote>
 
-      {routeBlocks(routeKey)}
+      {await routeBlocks(routeKey)}
     </div>
   );
 }
+
+
+

@@ -12,8 +12,27 @@ import { StatusBadge } from "@/components/status-badge";
 import { TimelineShell } from "@/components/timeline-shell";
 import { useDemoState } from "@/components/demo-state-provider";
 import { auditEvents, defectReasonBreakdownRows, getQualitySummary, inspectionQueueRows, j2042QualityTimeline, j2042ScrapEventDetail, jobs, reworkOrders } from "@/lib/demo-data";
+import type {
+  AuditEvent,
+  DefectReasonBreakdownRow,
+  InspectionQueueRow,
+  Job,
+  QualityTimelineEntry,
+  ReworkOrder,
+  ScrapEventDetail
+} from "@/lib/demo-data/types";
 import { getEffectiveAuditEvents, getEffectiveJob, getEffectiveReworkOrder } from "@/lib/demo-state";
 import { cn } from "@/lib/utils";
+
+type QualityBaseProps = {
+  baseJobs?: Job[];
+  baseReworkOrders?: ReworkOrder[];
+  baseAuditEvents?: AuditEvent[];
+  baseInspectionQueueRows?: InspectionQueueRow[];
+  baseDefectReasonBreakdownRows?: DefectReasonBreakdownRow[];
+  baseQualityTimeline?: QualityTimelineEntry[];
+  baseScrapEventDetail?: ScrapEventDetail;
+};
 
 function getQualityAuditHref(entityId: string) {
   if (entityId === "J-2042") {
@@ -27,15 +46,21 @@ function getQualityAuditHref(entityId: string) {
   return "/audit";
 }
 
-export function QualityDashboardView() {
+export function QualityDashboardView({
+  baseJobs = jobs,
+  baseReworkOrders = reworkOrders,
+  baseAuditEvents = auditEvents,
+  baseInspectionQueueRows = inspectionQueueRows,
+  baseQualityTimeline = j2042QualityTimeline
+}: QualityBaseProps = {}) {
   const { state } = useDemoState();
-  const effectiveJobs = useMemo(() => jobs.map((job) => getEffectiveJob(job, state)), [state]);
-  const effectiveReworkOrders = useMemo(() => reworkOrders.map((order) => getEffectiveReworkOrder(order, state)), [state]);
-  const effectiveAuditEvents = getEffectiveAuditEvents(auditEvents, state);
+  const effectiveJobs = useMemo(() => baseJobs.map((job) => getEffectiveJob(job, state)), [baseJobs, state]);
+  const effectiveReworkOrders = useMemo(() => baseReworkOrders.map((order) => getEffectiveReworkOrder(order, state)), [baseReworkOrders, state]);
+  const effectiveAuditEvents = getEffectiveAuditEvents(baseAuditEvents, state);
   const summary = getQualitySummary(effectiveJobs, effectiveReworkOrders, inspectionQueueRows);
   const j2042 = effectiveJobs.find((job) => job.id === "J-2042");
   const hasRuntimeApproval = j2042?.status === "Rework";
-  const inspectionQueue = inspectionQueueRows.map((row) =>
+  const inspectionQueue = baseInspectionQueueRows.map((row) =>
     row.jobId === "J-2042"
       ? {
           ...row,
@@ -48,7 +73,7 @@ export function QualityDashboardView() {
   const recentQualityEvents = useMemo(
     () =>
       [
-        ...j2042QualityTimeline,
+        ...baseQualityTimeline,
         ...effectiveAuditEvents
           .filter((event) => event.entityId === "J-2042" || event.entityId === "RW-2042-01")
           .slice(-2)
@@ -59,7 +84,7 @@ export function QualityDashboardView() {
             severity: event.severity
           }))
       ].slice(-5),
-    [effectiveAuditEvents]
+    [baseQualityTimeline, effectiveAuditEvents]
   );
 
   return (
@@ -199,11 +224,16 @@ export function QualityDashboardView() {
   );
 }
 
-export function ScrapApprovalView() {
+export function ScrapApprovalView({
+  baseJobs = jobs,
+  baseReworkOrders = reworkOrders,
+  baseAuditEvents = auditEvents,
+  baseScrapEventDetail = j2042ScrapEventDetail
+}: QualityBaseProps = {}) {
   const { state, approveScrapJ2042 } = useDemoState();
-  const effectiveJobs = useMemo(() => jobs.map((job) => getEffectiveJob(job, state)), [state]);
-  const effectiveReworkOrders = useMemo(() => reworkOrders.map((order) => getEffectiveReworkOrder(order, state)), [state]);
-  const effectiveAuditEvents = getEffectiveAuditEvents(auditEvents, state);
+  const effectiveJobs = useMemo(() => baseJobs.map((job) => getEffectiveJob(job, state)), [baseJobs, state]);
+  const effectiveReworkOrders = useMemo(() => baseReworkOrders.map((order) => getEffectiveReworkOrder(order, state)), [baseReworkOrders, state]);
+  const effectiveAuditEvents = getEffectiveAuditEvents(baseAuditEvents, state);
   const job = effectiveJobs.find((entry) => entry.id === "J-2042");
   const rework = effectiveReworkOrders.find((entry) => entry.id === "RW-2042-01");
   const approved = job?.status === "Rework";
@@ -275,23 +305,23 @@ export function ScrapApprovalView() {
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reported by operator</div>
-                <div className="mt-2 text-sm font-medium text-slate-950">{j2042ScrapEventDetail.reportedBy}</div>
+                <div className="mt-2 text-sm font-medium text-slate-950">{baseScrapEventDetail.reportedBy}</div>
               </div>
               <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reported at</div>
-                <div className="mt-2 text-sm font-medium text-slate-950">{j2042ScrapEventDetail.reportedAt}</div>
+                <div className="mt-2 text-sm font-medium text-slate-950">{baseScrapEventDetail.reportedAt}</div>
               </div>
               <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reason</div>
-                <div className="mt-2 text-sm font-medium text-slate-950">{j2042ScrapEventDetail.reason}</div>
+                <div className="mt-2 text-sm font-medium text-slate-950">{baseScrapEventDetail.reason}</div>
               </div>
               <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Operator note</div>
-                <div className="mt-2 text-sm leading-6 text-slate-700">{j2042ScrapEventDetail.operatorNote}</div>
+                <div className="mt-2 text-sm leading-6 text-slate-700">{baseScrapEventDetail.operatorNote}</div>
               </div>
               <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 md:col-span-2">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Inspection note</div>
-                <div className="mt-2 text-sm leading-6 text-slate-700">{j2042ScrapEventDetail.inspectionNote}</div>
+                <div className="mt-2 text-sm leading-6 text-slate-700">{baseScrapEventDetail.inspectionNote}</div>
               </div>
             </div>
           </TimelineShell>
@@ -418,11 +448,15 @@ export function ScrapApprovalView() {
   );
 }
 
-export function ReworkCreatedView() {
+export function ReworkCreatedView({
+  baseJobs = jobs,
+  baseReworkOrders = reworkOrders,
+  baseAuditEvents = auditEvents
+}: QualityBaseProps = {}) {
   const { state } = useDemoState();
-  const effectiveJobs = useMemo(() => jobs.map((job) => getEffectiveJob(job, state)), [state]);
-  const effectiveReworkOrders = useMemo(() => reworkOrders.map((order) => getEffectiveReworkOrder(order, state)), [state]);
-  const effectiveAuditEvents = getEffectiveAuditEvents(auditEvents, state);
+  const effectiveJobs = useMemo(() => baseJobs.map((job) => getEffectiveJob(job, state)), [baseJobs, state]);
+  const effectiveReworkOrders = useMemo(() => baseReworkOrders.map((order) => getEffectiveReworkOrder(order, state)), [baseReworkOrders, state]);
+  const effectiveAuditEvents = getEffectiveAuditEvents(baseAuditEvents, state);
   const job = effectiveJobs.find((entry) => entry.id === "J-2042");
   const rework = effectiveReworkOrders.find((entry) => entry.id === "RW-2042-01");
   const approved = job?.status === "Rework";
