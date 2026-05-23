@@ -17,34 +17,70 @@ import { PrintHeader } from "@/components/print-header";
 import { useDemoState } from "@/components/demo-state-provider";
 import {
   auditEvents,
-  customerSafeTimeline,
-  customerStatusReport,
-  customers,
+  customerSafeTimeline as seedCustomerSafeTimeline,
+  customerStatusReport as seedCustomerStatusReport,
+  customers as seedCustomers,
   getCustomerRiskQueue,
   getCustomerServiceSummary,
   getCustomerSafeJobStatus,
   getCustomerStatusReports,
-  jobs,
-  metrofabCustomerProfile,
-  reports
+  jobs as seedJobs,
+  metrofabCustomerProfile as seedMetrofabCustomerProfile,
+  reports as seedReports
 } from "@/lib/demo-data";
 import {
   getEffectiveAuditEvents,
   getEffectiveCustomerReport,
   getEffectiveJob
 } from "@/lib/demo-state";
+import type {
+  AuditEvent,
+  Customer,
+  CustomerProfile,
+  CustomerRiskQueueRow,
+  CustomerSafeJobStatus,
+  CustomerSafeTimelineItem,
+  CustomerServiceSummary,
+  CustomerStatusReport,
+  Job,
+  Report
+} from "@/lib/demo-data/types";
 
-function useCustomerReportWorkflowState() {
+type CustomerWorkflowBaseProps = {
+  baseJobs?: Job[];
+  baseCustomers?: Customer[];
+  baseReports?: Report[];
+  baseAuditEvents?: AuditEvent[];
+  baseCustomerProfile?: CustomerProfile;
+  baseCustomerServiceSummary?: CustomerServiceSummary;
+  baseCustomerRiskQueue?: CustomerRiskQueueRow[];
+  baseCustomerSafeJobStatus?: CustomerSafeJobStatus;
+  baseCustomerStatusReport?: CustomerStatusReport;
+  baseCustomerSafeTimeline?: CustomerSafeTimelineItem[];
+};
+
+function useCustomerReportWorkflowState({
+  baseJobs = seedJobs,
+  baseCustomers = seedCustomers,
+  baseReports = seedReports,
+  baseAuditEvents = auditEvents,
+  baseCustomerProfile = seedMetrofabCustomerProfile,
+  baseCustomerServiceSummary,
+  baseCustomerRiskQueue,
+  baseCustomerSafeJobStatus,
+  baseCustomerStatusReport = seedCustomerStatusReport,
+  baseCustomerSafeTimeline = seedCustomerSafeTimeline
+}: CustomerWorkflowBaseProps = {}) {
   const { state, generateCustomerReportJ2035 } = useDemoState();
-  const effectiveJobs = useMemo(() => jobs.map((job) => getEffectiveJob(job, state)), [state]);
-  const effectiveCustomerReport = getEffectiveCustomerReport(customerStatusReport, state);
-  const effectiveAuditEvents = getEffectiveAuditEvents(auditEvents, state);
+  const effectiveJobs = useMemo(() => baseJobs.map((job) => getEffectiveJob(job, state)), [baseJobs, state]);
+  const effectiveCustomerReport = getEffectiveCustomerReport(baseCustomerStatusReport, state);
+  const effectiveAuditEvents = getEffectiveAuditEvents(baseAuditEvents, state);
   const reportGenerated = Boolean(state.reports["J-2035-CUSTOMER-STATUS"]?.exists);
   const generatedAt = state.reports["J-2035-CUSTOMER-STATUS"]?.generatedAt ?? effectiveCustomerReport.preparedTimestamp;
-
-  const customerServiceSummary = useMemo(() => {
-    return getCustomerServiceSummary(effectiveJobs, reports);
-  }, [effectiveJobs]);
+  const customerServiceSummary =
+    baseCustomerServiceSummary ?? getCustomerServiceSummary(effectiveJobs, baseReports);
+  const customerRiskQueue = baseCustomerRiskQueue ?? getCustomerRiskQueue(effectiveJobs);
+  const customerSafeStatus = baseCustomerSafeJobStatus ?? getCustomerSafeJobStatus("J-2035", effectiveJobs);
 
   return {
     state,
@@ -54,16 +90,22 @@ function useCustomerReportWorkflowState() {
     effectiveAuditEvents,
     reportGenerated,
     generatedAt,
-    customerServiceSummary
+    customerServiceSummary,
+    customerRiskQueue,
+    customerSafeStatus,
+    baseCustomers,
+    baseCustomerProfile,
+    baseCustomerSafeTimeline,
+    baseCustomerStatusReport
   };
 }
 
-export function CustomerServiceCommandCenterView() {
-  const { effectiveJobs, reportGenerated, customerServiceSummary } = useCustomerReportWorkflowState();
-  const riskQueue = getCustomerRiskQueue(effectiveJobs);
+export function CustomerServiceCommandCenterView(props: CustomerWorkflowBaseProps = {}) {
+  const { effectiveJobs, reportGenerated, customerServiceSummary, customerRiskQueue, baseCustomers } =
+    useCustomerReportWorkflowState(props);
+  const riskQueue = customerRiskQueue;
   const j2035 = effectiveJobs.find((job) => job.id === "J-2035");
-
-  const customerCards = customers.map((customer) => customer.name);
+  const customerCards = baseCustomers.map((customer) => customer.name);
 
   return (
     <div className="space-y-4">
@@ -200,9 +242,10 @@ export function CustomerServiceCommandCenterView() {
   );
 }
 
-export function CustomerDetailView() {
-  const { effectiveCustomerReport, reportGenerated, generatedAt } = useCustomerReportWorkflowState();
-  const customerJobs = jobs.filter((job) => job.customerSlug === "metrofab-industries" || job.id === "J-2035");
+export function CustomerDetailView(props: CustomerWorkflowBaseProps = {}) {
+  const { effectiveJobs, effectiveCustomerReport, reportGenerated, generatedAt, baseCustomerProfile } =
+    useCustomerReportWorkflowState(props);
+  const customerJobs = effectiveJobs.filter((job) => job.customerSlug === "metrofab-industries" || job.id === "J-2035");
 
   return (
     <div className="space-y-4">
@@ -211,40 +254,40 @@ export function CustomerDetailView() {
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <CustomerSafeViewLabel />
-              <StatusBadge label={metrofabCustomerProfile.status} />
+            <StatusBadge label={baseCustomerProfile.status} />
+          </div>
+          <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Customer Detail - MetroFab Industries</h1>
+          <div className="grid gap-x-4 gap-y-1 text-sm text-slate-600 md:grid-cols-2">
+            <div>
+                Account contact: <span className="font-medium text-slate-950">{baseCustomerProfile.accountContact}</span>
             </div>
-            <h1 className="text-[22px] font-semibold tracking-tight text-slate-950">Customer Detail - MetroFab Industries</h1>
-            <div className="grid gap-x-4 gap-y-1 text-sm text-slate-600 md:grid-cols-2">
-              <div>
-                Account contact: <span className="font-medium text-slate-950">{metrofabCustomerProfile.accountContact}</span>
-              </div>
-              <div>
-                Email: <span className="font-medium text-slate-950">{metrofabCustomerProfile.email}</span>
-              </div>
-              <div>
-                Phone: <span className="font-medium text-slate-950">{metrofabCustomerProfile.phone}</span>
-              </div>
-              <div>
-                Open jobs: <span className="font-medium text-slate-950">{metrofabCustomerProfile.openJobs}</span>
-              </div>
-              <div>
-                Open quotes: <span className="font-medium text-slate-950">{metrofabCustomerProfile.openQuotes}</span>
-              </div>
-              <div>
-                On-time delivery rate: <span className="font-medium text-slate-950">{metrofabCustomerProfile.onTimeDeliveryRate}%</span>
-              </div>
+            <div>
+                Email: <span className="font-medium text-slate-950">{baseCustomerProfile.email}</span>
+            </div>
+            <div>
+                Phone: <span className="font-medium text-slate-950">{baseCustomerProfile.phone}</span>
+            </div>
+            <div>
+                Open jobs: <span className="font-medium text-slate-950">{baseCustomerProfile.openJobs}</span>
+            </div>
+            <div>
+                Open quotes: <span className="font-medium text-slate-950">{baseCustomerProfile.openQuotes}</span>
+            </div>
+            <div>
+                On-time delivery rate: <span className="font-medium text-slate-950">{baseCustomerProfile.onTimeDeliveryRate}%</span>
             </div>
           </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <MetricCard label="Customer status" value={metrofabCustomerProfile.status} detail="Active account" tone="emerald" />
-            <MetricCard label="Open jobs" value={`${metrofabCustomerProfile.openJobs}`} detail="Production and support" tone="blue" />
-            <MetricCard label="Open quotes" value={`${metrofabCustomerProfile.openQuotes}`} detail="Commercial pipeline" tone="amber" />
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <MetricCard label="Customer status" value={baseCustomerProfile.status} detail="Active account" tone="emerald" />
+            <MetricCard label="Open jobs" value={`${baseCustomerProfile.openJobs}`} detail="Production and support" tone="blue" />
+            <MetricCard label="Open quotes" value={`${baseCustomerProfile.openQuotes}`} detail="Commercial pipeline" tone="amber" />
           </div>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {metrofabCustomerProfile.tabs.map((tab, index) => (
+        {baseCustomerProfile.tabs.map((tab, index) => (
           <span
             key={tab}
             className={
@@ -337,15 +380,21 @@ export function CustomerDetailView() {
   );
 }
 
-export function CustomerServiceJobView() {
-  const { generateCustomerReportJ2035, reportGenerated, effectiveCustomerReport, effectiveAuditEvents } =
-    useCustomerReportWorkflowState();
+export function CustomerServiceJobView(props: CustomerWorkflowBaseProps = {}) {
+  const {
+    generateCustomerReportJ2035,
+    reportGenerated,
+    effectiveCustomerReport,
+    effectiveAuditEvents,
+    customerSafeStatus: customerSafeStatusRecord
+  } =
+    useCustomerReportWorkflowState(props);
 
-  const customerSafe = getCustomerSafeJobStatus("J-2035", jobs);
+  const customerSafe = customerSafeStatusRecord;
   const customerSafeSummary =
     customerSafe?.summary ??
     "The shop is actively working the order while customer-safe details remain visible.";
-  const customerSafeStatus = customerSafe?.status ?? "In Production";
+  const currentCustomerSafeStatus = customerSafe?.status ?? "In Production";
   const auditRecords = effectiveAuditEvents.filter((event) => event.entityId === "J-2035" || event.entityId === "RPT-J-2035-CUSTOMER");
 
   return (
@@ -380,7 +429,7 @@ export function CustomerServiceJobView() {
                 Customer-facing status: <span className="font-medium text-slate-950">On Track</span>
               </div>
               <div>
-                Internal status: <span className="font-medium text-slate-950">{customerSafeStatus}</span>
+                Internal status: <span className="font-medium text-slate-950">{currentCustomerSafeStatus}</span>
               </div>
               <div>
                 Current routing step: <span className="font-medium text-slate-950">Bend</span>
@@ -540,15 +589,21 @@ export function CustomerServiceJobView() {
   );
 }
 
-export function CustomerReportView() {
-  const { effectiveCustomerReport, reportGenerated, generatedAt, effectiveAuditEvents } = useCustomerReportWorkflowState();
+export function CustomerReportView(props: CustomerWorkflowBaseProps = {}) {
+  const {
+    effectiveCustomerReport,
+    reportGenerated,
+    generatedAt,
+    effectiveAuditEvents,
+    baseCustomerSafeTimeline
+  } = useCustomerReportWorkflowState(props);
   const auditRecords = effectiveAuditEvents.filter((event) => event.entityId === "J-2035" || event.entityId === "RPT-J-2035-CUSTOMER");
   const customerReportView = getCustomerStatusReports(
     {
       ...effectiveCustomerReport,
       preparedTimestamp: generatedAt
     },
-    customerSafeTimeline
+    baseCustomerSafeTimeline
   );
 
   return (
@@ -678,9 +733,10 @@ export function CustomerReportView() {
   );
 }
 
-export function CustomerReportPrintView() {
-  const { effectiveCustomerReport, reportGenerated, generatedAt } = useCustomerReportWorkflowState();
-  const preparedTimestamp = generatedAt ?? customerStatusReport.preparedTimestamp;
+export function CustomerReportPrintView(props: CustomerWorkflowBaseProps = {}) {
+  const { effectiveCustomerReport, reportGenerated, generatedAt, baseCustomerSafeTimeline, baseCustomerStatusReport } =
+    useCustomerReportWorkflowState(props);
+  const preparedTimestamp = generatedAt ?? baseCustomerStatusReport.preparedTimestamp;
 
   const printReport = {
     ...effectiveCustomerReport,
@@ -743,7 +799,7 @@ export function CustomerReportPrintView() {
 
       <TimelineShell title="Customer-safe timeline" subtitle="Printed report keeps the communication aligned and readable.">
         <div className="space-y-2">
-          {customerSafeTimeline.map((item) => (
+          {baseCustomerSafeTimeline.map((item) => (
             <div key={item.title} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
               <div>
                 <div className="text-sm font-medium text-slate-950">{item.title}</div>
