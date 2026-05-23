@@ -1,0 +1,41 @@
+name: DB Migration Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      JOBSHOP_DATA_SOURCE: database
+      # Use the Neon pooled URL for Prisma Client/runtime queries.
+      DATABASE_URL: ${{ secrets.JOBSHOP_DATABASE_URL }}
+      # Use the Neon direct URL for Prisma CLI migration/introspection steps.
+      DIRECT_URL: ${{ secrets.JOBSHOP_DIRECT_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run Prisma migrations
+        run: npm run db:migrate
+
+      - name: Seed database
+        run: npm run db:seed
+
+      - name: Smoke test quote commands
+        run: npm run smoke:quote-commands

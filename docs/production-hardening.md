@@ -182,3 +182,23 @@ JOBSHOP_DATA_SOURCE=database DATABASE_URL=... npm run db:diagnostic
 This diagnostic only checks Prisma Client connectivity by running a simple `SELECT 1` query. It does not prove migrations work.
 
 If `db:diagnostic` passes but `db:migrate` still fails, the issue is likely in Prisma Migrate, the schema engine, or the CLI environment rather than Neon connectivity.
+
+## GitHub Actions Migration Smoke
+
+To run the Linux migration smoke path in GitHub Actions, add these repository secrets:
+
+- `JOBSHOP_DATABASE_URL`: the Neon pooled URL used by Prisma Client/runtime queries
+- `JOBSHOP_DIRECT_URL`: the Neon direct URL used by Prisma CLI migration/introspection commands
+
+Then open the manual workflow in the repository Actions tab and run **DB Migration Smoke**.
+
+The workflow runs on `ubuntu-latest` and executes:
+
+1. `npm ci`
+2. `npx prisma validate`
+3. `npx prisma generate`
+4. `npm run db:migrate`
+5. `npm run db:seed`
+6. `npm run smoke:quote-commands`
+
+This exists to isolate the native Windows Prisma schema-engine failure mode from actual Neon connectivity or schema problems. If the Linux workflow passes but native Windows migrate still fails, the issue is likely the local Windows Prisma CLI/schema-engine environment rather than the schema or database.
