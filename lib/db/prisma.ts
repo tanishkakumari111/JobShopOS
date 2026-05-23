@@ -1,4 +1,6 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaNeon } from "@prisma/adapter-neon";
+import { neonConfig } from "@neondatabase/serverless";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -18,8 +20,11 @@ function getDatabaseUrl() {
 
 export function getPrismaClient() {
   if (!globalThis.__jobshopPrismaClient) {
-    getDatabaseUrl();
-    globalThis.__jobshopPrismaClient = new PrismaClient();
+    const connectionString = getDatabaseUrl();
+
+    neonConfig.poolQueryViaFetch = true;
+    const adapter = new PrismaNeon({ connectionString });
+    globalThis.__jobshopPrismaClient = new PrismaClient({ adapter });
   }
 
   return globalThis.__jobshopPrismaClient;

@@ -95,6 +95,14 @@ Set the database connection before running migration or seed commands:
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
 ```
 
+Prisma 7 uses a driver adapter for runtime queries. This project uses Neon via:
+
+- `@prisma/adapter-neon`
+- `@neondatabase/serverless`
+
+Use the pooled Neon URL in `DATABASE_URL` for Prisma Client/runtime queries.
+Use `DIRECT_URL` for Prisma CLI commands such as migration and introspection when you need a direct connection to Neon.
+
 ## Common Commands
 
 ```bash
