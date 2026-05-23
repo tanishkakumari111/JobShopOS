@@ -1,5 +1,3 @@
-import "server-only";
-
 import { getPrismaClient } from "@/lib/db/prisma";
 
 async function main() {
