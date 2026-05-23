@@ -1,5 +1,3 @@
-import "server-only";
-
 import { getDataSourceMode } from "@/lib/data-source";
 import { getPrismaClient } from "@/lib/db/prisma";
 import { approveQuoteCommand, convertQuoteToJobCommand } from "@/lib/commands/quote-commands";
@@ -106,4 +104,3 @@ main().catch((error) => {
   console.error(error instanceof Error ? error.stack ?? error.message : error);
   process.exitCode = 1;
 });
-
