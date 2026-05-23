@@ -5,7 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { getDataSourceMode, isDatabaseMode } from "@/lib/data-source";
 import { getPrismaClient } from "@/lib/db/prisma";
 
-import { createValidationError, createUnexpectedError } from "./errors";
+import { createValidationError, toCommandErrorPayload } from "./errors";
 import { prepareAuditEventInput, writeAuditEvents } from "./audit";
 import {
   getWorkflowCommandReplay,
@@ -100,16 +100,11 @@ export async function runWorkflowCommand<T>({
         context.idempotencyKey,
         command.id,
         undefined,
-        {
-          code: "UNEXPECTED_ERROR",
-          message: error instanceof Error ? error.message : "An unexpected command error occurred.",
-          details: error instanceof Error ? undefined : error
-        }
+        toCommandErrorPayload(error)
       );
 
       await recordWorkflowCommandFailure(tx, command.id, failureResult.error);
-      throw error instanceof Error ? error : createUnexpectedError();
+      return failureResult;
     }
   });
 }
-

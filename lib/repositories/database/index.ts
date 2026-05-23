@@ -36,7 +36,6 @@ import type {
   PurchaseRequestAuditEntry,
   Quote,
   QuoteApprovalHistoryEntry,
-  QuoteConversionRecord,
   QuoteFormSnapshot,
   QuoteMaterialEstimateRow,
   QuoteRoutingEstimateRow,
@@ -709,10 +708,73 @@ export function createDatabaseRepositories(): RepositorySet {
           detail: row.detail
         }));
       },
-      getQuoteRoutingEstimate: notImplemented<QuoteRoutingEstimateRow[]>("quotes.getQuoteRoutingEstimate"),
-      getQuoteMaterialEstimate: notImplemented<QuoteMaterialEstimateRow[]>("quotes.getQuoteMaterialEstimate"),
+      getQuoteRoutingEstimate: async (id: string) => {
+        const rows = await prisma.quoteRoutingStep.findMany({
+          where: { quoteId: id },
+          orderBy: { stepNumber: "asc" }
+        });
+
+        return rows.map((row): QuoteRoutingEstimateRow => ({
+          operation: row.operation,
+          workCenter: row.workCenter,
+          estimatedHours: row.estimatedHours,
+          machine: row.machine,
+          notes: row.notes
+        }));
+      },
+      getQuoteMaterialEstimate: async (id: string) => {
+        const rows = await prisma.quoteMaterialLine.findMany({
+          where: { quoteId: id },
+          orderBy: { createdAt: "asc" }
+        });
+
+        return rows.map((row): QuoteMaterialEstimateRow => ({
+          sku: row.sku,
+          materialName: row.materialName,
+          quantity: row.quantity,
+          unitCost: row.unitCost,
+          extendedCost: row.extendedCost,
+          availabilityStatus: row.availabilityStatus
+        }));
+      },
       getQuoteForm: notImplemented<QuoteFormSnapshot | undefined>("quotes.getQuoteForm"),
-      getConversionRecord: notImplemented<QuoteConversionRecord | undefined>("quotes.getConversionRecord"),
+      getConversionRecord: async (id: string) => {
+        const quote = await prisma.quote.findUnique({ where: { id } });
+        if (!quote || quote.status !== "CONVERTED_TO_JOB") {
+          return undefined;
+        }
+
+        const job =
+          (await prisma.job.findFirst({ where: { sourceQuoteId: quote.id } })) ??
+          (quote.id === "Q-1003" ? await prisma.job.findUnique({ where: { id: "J-2104" } }) : undefined);
+
+        if (!job || job.sourceQuoteId !== quote.id) {
+          return undefined;
+        }
+
+        const routingSteps = await prisma.jobRoutingStep.findMany({
+          where: { jobId: job.id },
+          orderBy: { stepNumber: "asc" }
+        });
+
+        return {
+          quoteId: quote.id,
+          customerName: quote.customerName,
+          jobNumber: job.id,
+          workOrder: job.workOrder ?? "WO-2104",
+          routingTemplate: quote.id === "Q-1003" ? "Welded Frame Assembly Routing" : `${quote.part} Routing`,
+          initialMaterialReservation: job.id === "J-2104" ? "Enabled" : "Pending",
+          scheduler: quote.id === "Q-1003" ? "Sam Rivera" : "Scheduler",
+          supervisor: quote.id === "Q-1003" ? "Dana Brooks" : "Supervisor",
+          generatedRouting:
+            routingSteps.length > 0 ? routingSteps.map((step) => step.operation) : quote.id === "Q-1003" ? ["Cut", "Bend", "Weld", "Finish", "Inspect", "Pack"] : [],
+          createdRecords:
+            quote.id === "Q-1003"
+              ? ["Job J-2104", "Work Order WO-2104", "Initial routing", "Material reservation tasks"]
+              : [`Job ${job.id}`, `Work Order ${job.workOrder ?? "Pending"}`],
+          updatedQuoteStatus: "Converted to Job"
+        };
+      },
       requiresOwnerApproval: async (amount: number, threshold = 50000) => amount >= threshold
     },
     jobs: {

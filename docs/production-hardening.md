@@ -144,3 +144,9 @@ Important behavior:
 `approveQuoteCommand()` is now implemented as the first transactional server command.
 
 It runs only in database mode, uses `WorkflowCommand` idempotency, writes transactional `AuditEvent` rows, and records an approval history row for the quote. Demo mode and the browser-local quote workflow remain unchanged until the UI is intentionally rewired later.
+
+## Phase 12C Status
+
+`convertQuoteToJobCommand()` is now implemented as the second transactional server command.
+
+It converts an approved quote into a job and work order in database mode, generates routing and material task records when the schema supports them, and writes the conversion audit trail transactionally. Demo mode and the browser-local quote workflow remain unchanged until the UI is intentionally rewired later.
