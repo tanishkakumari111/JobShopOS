@@ -16,11 +16,13 @@ import type {
   EntityTimelineEntry,
   InspectionQueueRow,
   Job,
+  JobRoutingStep,
   Material,
   MaterialAffectedJobRow,
   MaterialDashboardRow,
   MaterialReservationBreakdownRow,
   MaterialTimelineEntry,
+  ProductionUpdate,
   ProductionQueueRow,
   PurchaseRequest,
   PurchaseRequestAuditEntry,
@@ -38,14 +40,12 @@ import type {
   Report,
   ReworkOrder,
   ScrapEventDetail,
-  TravelerMaterialRow,
-  TravelerRoutingRow,
-  WorkCenter,
   WorkCenterCapacityRow,
   FinalValuePillar
 } from "../demo-data/types";
 
 export interface CustomerRepository {
+  getCustomers(): Promise<Customer[]>;
   getCustomerBySlug(slug: string): Promise<Customer | undefined>;
   getCustomerByName(name: string): Promise<Customer | undefined>;
   getCustomerSafeJobStatus(jobId: string): Promise<CustomerSafeJobStatus | undefined>;
@@ -55,6 +55,7 @@ export interface CustomerRepository {
 }
 
 export interface QuoteRepository {
+  getQuotes(): Promise<Quote[]>;
   getQuoteById(id: string): Promise<Quote | undefined>;
   getQuoteSummary(): Promise<QuoteSummary>;
   getQuoteRows(): Promise<QuoteDashboardRow[]>;
@@ -68,7 +69,10 @@ export interface QuoteRepository {
 }
 
 export interface JobRepository {
+  getJobs(): Promise<Job[]>;
   getJobById(id: string): Promise<Job | undefined>;
+  getJobRoutingSteps(jobId: string): Promise<JobRoutingStep[]>;
+  getProductionUpdates(jobId: string): Promise<ProductionUpdate[]>;
   getDashboardMetrics(): Promise<DashboardMetrics>;
   getDashboardRiskItems(): Promise<DashboardRiskItem[]>;
   getProductionQueue(): Promise<ProductionQueueRow[]>;
@@ -84,6 +88,7 @@ export interface WorkCenterRepository {
 }
 
 export interface MaterialRepository {
+  getMaterials(): Promise<Material[]>;
   getMaterialBySku(sku: string): Promise<Material | undefined>;
   getMaterialsSummary(): Promise<{
     materialsBelowReorderPoint: number;
@@ -108,14 +113,17 @@ export interface MaterialRepository {
 }
 
 export interface QualityRepository {
+  getReworkOrders(): Promise<ReworkOrder[]>;
   getQualitySummary(): Promise<QualitySummary>;
   getInspectionQueue(): Promise<InspectionQueueRow[]>;
   getDefectReasonBreakdown(): Promise<DefectReasonBreakdownRow[]>;
+  getQualityTimeline(jobId: string): Promise<EntityTimelineEntry[]>;
   getReworkOrderById(id: string): Promise<ReworkOrder | undefined>;
   getScrapEventDetail(jobId: string): Promise<ScrapEventDetail | undefined>;
 }
 
 export interface PurchasingRepository {
+  getPurchaseRequests(): Promise<PurchaseRequest[]>;
   getPurchaseRequestById(id: string): Promise<PurchaseRequest | undefined>;
   getPurchaseRequestState(id: string): Promise<PurchaseRequestState | undefined>;
   getPurchaseRequestAuditEntries(id: string): Promise<PurchaseRequestAuditEntry[]>;

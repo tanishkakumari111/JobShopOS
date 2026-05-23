@@ -50,9 +50,12 @@ import {
   q1003ConversionRecord,
   q1003QuoteForm,
   j2042ScrapEventDetail,
+  j2042QualityTimeline,
   quoteMaterialEstimateRows,
   quoteRoutingEstimateRows,
   quotes,
+  j2035RoutingSteps,
+  j2035ProductionUpdates,
   pr3091AuditTrail,
   reworkOrders,
   reports,
@@ -75,16 +78,14 @@ import type {
   FinalValuePillar,
   InspectionQueueRow,
   Job,
+  JobRoutingStep,
   Material,
   MaterialAffectedJobRow,
   MaterialDashboardRow,
-  MaterialReservationBreakdownRow,
   MaterialTimelineEntry,
+  ProductionUpdate,
   PurchaseRequest,
-  PurchaseRequestAuditEntry,
-  PurchaseRequestState,
   ProductionQueueRow,
-  QualitySummary,
   Quote,
   QuoteApprovalQueueRow,
   QuoteApprovalHistoryEntry,
@@ -97,13 +98,13 @@ import type {
   Report,
   ReworkOrder,
   ScrapEventDetail,
-  WorkCenter,
   WorkCenterCapacityRow
 } from "../../demo-data/types";
 
 export function createDemoRepositories() {
   return {
     customers: {
+      getCustomers: async (): Promise<Customer[]> => customers,
       getCustomerBySlug: async (slug: string): Promise<Customer | undefined> =>
         getCustomerBySlug(slug, customers),
       getCustomerByName: async (name: string): Promise<Customer | undefined> =>
@@ -122,6 +123,7 @@ export function createDemoRepositories() {
           : undefined
     },
     quotes: {
+      getQuotes: async (): Promise<Quote[]> => quotes,
       getQuoteById: async (id: string): Promise<Quote | undefined> => getQuoteById(id, quotes),
       getQuoteSummary: async (): Promise<QuoteSummary> => getQuoteSummary(quotes, jobs),
       getQuoteRows: async (): Promise<QuoteDashboardRow[]> => getQuoteRows(quotes),
@@ -135,7 +137,12 @@ export function createDemoRepositories() {
         amount >= threshold
     },
     jobs: {
+      getJobs: async (): Promise<Job[]> => jobs,
       getJobById: async (id: string): Promise<Job | undefined> => getJobById(id, jobs),
+      getJobRoutingSteps: async (jobId: string): Promise<JobRoutingStep[]> =>
+        (jobId === "J-2035" ? j2035RoutingSteps : []),
+      getProductionUpdates: async (jobId: string): Promise<ProductionUpdate[]> =>
+        (jobId === "J-2035" ? j2035ProductionUpdates : []),
       getDashboardMetrics: async (): Promise<DashboardMetrics> =>
         getDashboardMetrics(jobs, workCenters, auditEvents, reworkOrders),
       getDashboardRiskItems: async (): Promise<DashboardRiskItem[]> =>
@@ -153,6 +160,7 @@ export function createDemoRepositories() {
       getCapacityRiskJobIds: async () => getCapacityRiskJobIds(jobs, workCenters)
     },
     materials: {
+      getMaterials: async (): Promise<Material[]> => materials,
       getMaterialBySku: async (sku: string): Promise<Material | undefined> => getMaterialBySku(sku, materials),
       getMaterialsSummary: async () => getMaterialsSummary(materials, jobs, purchaseRequests),
       getMaterialRows: async (): Promise<MaterialDashboardRow[]> => getMaterialRows(materials, jobs),
@@ -166,6 +174,7 @@ export function createDemoRepositories() {
       ] satisfies MaterialTimelineEntry[])
     },
     quality: {
+      getReworkOrders: async (): Promise<ReworkOrder[]> => reworkOrders,
       getQualitySummary: async () => getQualitySummary(jobs, reworkOrders, getInspectionQueue([
         {
           jobId: "J-2042",
@@ -207,13 +216,19 @@ export function createDemoRepositories() {
         ]),
       getReworkOrderById: async (id: string): Promise<ReworkOrder | undefined> =>
         getReworkOrderById(id, reworkOrders),
-      getScrapEventDetail: async (): Promise<ScrapEventDetail | undefined> => j2042ScrapEventDetail
+      getQualityTimeline: async (jobId: string) =>
+        (jobId === "J-2042" ? j2042QualityTimeline.map((entry) => ({ ...entry })) : []),
+      getScrapEventDetail: async (jobId: string): Promise<ScrapEventDetail | undefined> =>
+        jobId === "J-2042" ? j2042ScrapEventDetail : undefined
     },
     purchasing: {
+      getPurchaseRequests: async (): Promise<PurchaseRequest[]> => purchaseRequests,
       getPurchaseRequestById: async (id: string): Promise<PurchaseRequest | undefined> =>
         getPurchaseRequestById(id, purchaseRequests),
-      getPurchaseRequestState: async () => getPurchaseRequestState(purchaseRequestState),
-      getPurchaseRequestAuditEntries: async () => getPurchaseRequestAuditEntries(pr3091AuditTrail)
+      getPurchaseRequestState: async (id: string) =>
+        id === "PR-3091" ? getPurchaseRequestState(purchaseRequestState) : undefined,
+      getPurchaseRequestAuditEntries: async (id: string) =>
+        id === "PR-3091" ? getPurchaseRequestAuditEntries(pr3091AuditTrail) : []
     },
     reports: {
       getReports: async (): Promise<Report[]> => reports,

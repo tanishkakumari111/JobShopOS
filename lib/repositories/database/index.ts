@@ -3,6 +3,7 @@ import {
   AuditSeverity as PrismaAuditSeverity,
   CustomerStatus as PrismaCustomerStatus,
   JobRisk as PrismaJobRisk,
+  ProductionUpdateStatus as PrismaProductionUpdateStatus,
   JobStatus as PrismaJobStatus,
   PurchaseRequestPriority as PrismaPurchaseRequestPriority,
   PurchaseRequestStatus as PrismaPurchaseRequestStatus,
@@ -10,53 +11,48 @@ import {
 } from "@prisma/client";
 
 import { getPrismaClient } from "../../db/prisma";
-import { getAuditEntityQuickFilters, getAuditSummary, getAuditTimelineRows, getRecentAuditEvents } from "../../demo-data";
+import {
+  getAuditEntityQuickFilters,
+  getAuditSummary,
+  getAuditTimelineRows,
+  getRecentAuditEvents,
+  getMaterialsSummary,
+  getMaterialRows,
+  getBlockedJobsByMaterialShortage,
+  getMaterialSupplierPanel,
+  getMaterialImpactTimeline,
+  getQualitySummary,
+} from "../../demo-data";
 import type {
   AuditEvent,
-  AuditQuickFilter,
-  AuditSummary,
-  AuditTimelineRow,
   Customer,
-  CustomerRiskQueueRow,
-  CustomerSafeJobStatus,
-  CustomerSafeTimelineItem,
-  CustomerServiceSummary,
-  CustomerStatusReport,
-  DashboardMetrics,
-  DashboardRiskItem,
-  DefectReasonBreakdownRow,
-  FinalValuePillar,
+  EntityTimelineEntry,
   InspectionQueueRow,
   Job,
+  JobRoutingStep,
   Material,
-  MaterialAffectedJobRow,
-  MaterialDashboardRow,
-  MaterialReservationBreakdownRow,
-  MaterialTimelineEntry,
-  ProductionQueueRow,
+  ProductionUpdate,
   PurchaseRequest,
   PurchaseRequestAuditEntry,
-  PurchaseRequestState,
   Quote,
   QuoteApprovalHistoryEntry,
-  QuoteApprovalQueueRow,
   QuoteConversionRecord,
-  QuoteDashboardRow,
   QuoteFormSnapshot,
   QuoteMaterialEstimateRow,
   QuoteRoutingEstimateRow,
-  QuoteSummary,
-  QualitySummary,
   Report,
   ReworkOrder,
-  ScrapEventDetail,
-  WorkCenter,
-  WorkCenterCapacityRow
+  WorkCenter
 } from "../../demo-data/types";
 import { createDemoRepositories } from "../demo";
 import type { RepositorySet } from "../types";
 
-const prisma = getPrismaClient();
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- lazy proxy keeps database access deferred until database mode is actually used
+const prisma = new Proxy({} as ReturnType<typeof getPrismaClient>, {
+  get(_target, prop) {
+    return Reflect.get(getPrismaClient() as object, prop);
+  }
+});
 
 function notImplemented<T>(label: string) {
   return async (): Promise<T> => {
@@ -208,6 +204,32 @@ function mapAuditEntityType(entityType: PrismaAuditEntityType): AuditEvent["enti
   }
 }
 
+function mapProductionUpdateStatus(status: PrismaProductionUpdateStatus): ProductionUpdate["status"] {
+  switch (status) {
+    case "COMPLETE":
+      return "Complete";
+    case "PENDING":
+      return "Pending";
+    case "WATCH":
+      return "Watch";
+    case "INFO":
+      return "Info";
+    default:
+      return "Info";
+  }
+}
+
+function mapJobRoutingStepStatus(status: string): JobRoutingStep["status"] {
+  switch (status) {
+    case "Complete":
+      return "Complete";
+    case "In Progress":
+      return "In Progress";
+    default:
+      return "Pending";
+  }
+}
+
 function toCustomer(row: Awaited<ReturnType<typeof prisma.customer.findUniqueOrThrow>>): Customer {
   return {
     slug: row.slug,
@@ -291,14 +313,25 @@ function toJob(row: Awaited<ReturnType<typeof prisma.job.findUniqueOrThrow>>): J
   };
 }
 
-function toWorkCenter(row: Awaited<ReturnType<typeof prisma.workCenter.findUniqueOrThrow>>): WorkCenter {
+function toJobRoutingStep(row: Awaited<ReturnType<typeof prisma.jobRoutingStep.findMany>>[number]): JobRoutingStep {
   return {
-    id: row.id,
-    name: row.name,
-    capacityHoursPerWeek: row.capacityHoursPerWeek,
-    queuedHoursPerWeek: row.queuedHoursPerWeek,
-    utilization: row.utilization,
-    status: mapWorkCenterStatus(row.status)
+    stepNumber: row.stepNumber,
+    operation: row.operation,
+    workCenter: row.workCenter,
+    plannedHours: row.plannedHours,
+    actualHours: row.actualHours ?? undefined,
+    assignedOperator: row.assignedOperator,
+    machine: row.machine,
+    status: mapJobRoutingStepStatus(row.status),
+    timestamp: row.timestamp ?? undefined
+  };
+}
+
+function toProductionUpdate(row: Awaited<ReturnType<typeof prisma.productionUpdate.findMany>>[number]): ProductionUpdate {
+  return {
+    label: row.label,
+    detail: row.detail,
+    status: mapProductionUpdateStatus(row.status)
   };
 }
 
@@ -365,9 +398,110 @@ function toAuditEvent(row: Awaited<ReturnType<typeof prisma.auditEvent.findMany>
   };
 }
 
+function buildInspectionQueueRows(jobs: Job[]): InspectionQueueRow[] {
+  const jobById = new Map(jobs.map((job) => [job.id, job]));
+  const rowFor = (jobId: string): InspectionQueueRow | undefined => {
+    const job = jobById.get(jobId);
+    if (!job) return undefined;
+
+    if (jobId === "J-2042") {
+      return {
+        jobId,
+        customerName: job.customerName,
+        part: job.part,
+        currentStep: job.currentStep ?? "Weld",
+        inspector: "Quality Inspector",
+        result: job.status === "Rework" ? "Passed" : "Failed",
+        scrapRate: `${Math.round((job.scrapRate ?? 0) * 100)}%`,
+        status: job.status === "Rework" ? "Approved" : "Scrap Approval Required",
+        dueDate: "Due in 2 business days",
+        action: job.status === "Rework" ? "View rework" : "Review scrap approval",
+        href: job.status === "Rework" ? "/quality/j-2042/rework-created" : "/quality/j-2042/scrap-approval"
+      };
+    }
+
+    if (jobId === "J-2035") {
+      return {
+        jobId,
+        customerName: job.customerName,
+        part: job.part,
+        currentStep: job.currentStep ?? "Finish",
+        inspector: "Quality Inspector",
+        result: "Pending",
+        scrapRate: "0%",
+        status: "Pending Inspection",
+        dueDate: "Due after Finish",
+        action: "Monitor inspection readiness",
+        href: "/jobs/j-2035"
+      };
+    }
+
+    if (jobId === "J-2099") {
+      return {
+        jobId,
+        customerName: job.customerName,
+        part: job.part,
+        currentStep: "Blocked",
+        inspector: "Quality Inspector",
+        result: "Pending",
+        scrapRate: "0%",
+        status: "Waiting Supervisor Review",
+        dueDate: "Waiting on material",
+        action: "Hold until material is released",
+        href: "/jobs/j-2099/material-impact"
+      };
+    }
+
+    return {
+      jobId,
+      customerName: job.customerName,
+      part: job.part,
+      currentStep: "Routing",
+      inspector: "Quality Inspector",
+      result: "Passed",
+      scrapRate: "0%",
+      status: "Passed",
+      dueDate: "Awaiting first article",
+      action: "Review routed job",
+      href: "/quotes/q-1003/convert"
+    };
+  };
+
+  return ["J-2042", "J-2035", "J-2099", "J-2104"].map((jobId) => rowFor(jobId)).filter((row): row is InspectionQueueRow => Boolean(row));
+}
+
+function toPurchaseRequestAuditEntry(row: Awaited<ReturnType<typeof prisma.auditEvent.findMany>>[number]): PurchaseRequestAuditEntry {
+  return {
+    timestamp: row.timestamp,
+    actor: row.actor,
+    role: row.role,
+    action: row.action,
+    entityType: row.entityType === "PURCHASE_REQUEST" ? "PurchaseRequest" : "Job",
+    entityId: row.entityId,
+    result: row.result,
+    notes: row.notes,
+    severity: mapAuditSeverity(row.severity)
+  };
+}
+
+function toEntityTimelineEntryFromAuditEvent(row: Awaited<ReturnType<typeof prisma.auditEvent.findMany>>[number]): EntityTimelineEntry {
+  return {
+    title: row.title ?? row.action,
+    detail: row.detail ?? row.notes,
+    timestamp: row.timestamp,
+    severity: mapAuditSeverity(row.severity)
+  };
+}
+
 export function createDatabaseRepositories(): RepositorySet {
+  const prisma = getPrismaClient();
+
   return {
     customers: {
+      getCustomers: async () => {
+        const rows = await prisma.customer.findMany({ orderBy: { slug: "asc" } });
+        return rows.map(toCustomer);
+      },
       getCustomerBySlug: async (slug: string) => {
         const row = await prisma.customer.findUnique({ where: { slug } });
         return row ? toCustomer(row) : undefined;
@@ -474,6 +608,10 @@ export function createDatabaseRepositories(): RepositorySet {
       }
     },
     quotes: {
+      getQuotes: async () => {
+        const rows = await prisma.quote.findMany({ orderBy: { id: "asc" } });
+        return rows.map(toQuote);
+      },
       getQuoteById: async (id: string) => {
         const row = await prisma.quote.findUnique({ where: { id } });
         return row ? toQuote(row) : undefined;
@@ -567,9 +705,27 @@ export function createDatabaseRepositories(): RepositorySet {
       requiresOwnerApproval: async (amount: number, threshold = 50000) => amount >= threshold
     },
     jobs: {
+      getJobs: async () => {
+        const rows = await prisma.job.findMany({ orderBy: { id: "asc" } });
+        return rows.map(toJob);
+      },
       getJobById: async (id: string) => {
         const row = await prisma.job.findUnique({ where: { id } });
         return row ? toJob(row) : undefined;
+      },
+      getJobRoutingSteps: async (jobId: string) => {
+        const rows = await prisma.jobRoutingStep.findMany({
+          where: { jobId },
+          orderBy: { stepNumber: "asc" }
+        });
+        return rows.map(toJobRoutingStep);
+      },
+      getProductionUpdates: async (jobId: string) => {
+        const rows = await prisma.productionUpdate.findMany({
+          where: { jobId },
+          orderBy: { createdAt: "asc" }
+        });
+        return rows.map(toProductionUpdate);
       },
       getDashboardMetrics: async () => {
         const [jobs, workCenters, auditEvents, reworkOrders] = await Promise.all([
@@ -605,7 +761,40 @@ export function createDatabaseRepositories(): RepositorySet {
           .filter((event) => event.entityType === "job" && event.entityId === jobId);
       },
       getJ2035EntityTimeline: async () => createDemoRepositories().jobs.getJ2035EntityTimeline(),
-      getCustomerSafeJobStatus: async (jobId: string) => createDemoRepositories().customers.getCustomerSafeJobStatus(jobId)
+      getCustomerSafeJobStatus: async (jobId: string) => {
+        const job = await prisma.job.findUnique({ where: { id: jobId } });
+        if (!job) return undefined;
+
+        const summaryMap: Record<string, string> = {
+          IN_PRODUCTION: "The shop is actively working the order.",
+          WAITING_ON_MATERIAL: "The order is waiting on incoming material.",
+          PURCHASE_REQUESTED: "The order is waiting on supplier confirmation.",
+          SCRAP_APPROVAL_REQUIRED: "A quality disposition decision is pending.",
+          APPROVED: "The job has been released to production.",
+          READY_TO_SHIP: "The job is complete and waiting for shipment."
+        };
+
+        return {
+          jobId: job.id,
+          customerName: job.customerName,
+          part: job.part,
+          status: mapJobStatus(job.status),
+          progress: job.progress ?? 0,
+          nextMilestone:
+            job.status === "IN_PRODUCTION"
+              ? "Inspection"
+              : job.status === "WAITING_ON_MATERIAL"
+                ? "Material receipt"
+                : job.status === "PURCHASE_REQUESTED"
+                  ? "Supplier confirmation"
+                  : job.status === "SCRAP_APPROVAL_REQUIRED"
+                    ? "Disposition"
+                    : "Next step",
+          eta: job.dueDate,
+          risk: mapJobRisk(job.risk),
+          summary: summaryMap[job.status] ?? "Customer-safe summary available."
+        };
+      }
     },
     workCenters: {
       getCapacitySummary: async () => {
@@ -623,25 +812,246 @@ export function createDatabaseRepositories(): RepositorySet {
           utilization: bottleneck?.utilization ?? 0
         };
       },
-      getWorkCenterCapacityRows: async () => createDemoRepositories().workCenters.getWorkCenterCapacityRows(),
-      getCapacityRiskJobIds: async () => createDemoRepositories().workCenters.getCapacityRiskJobIds()
+      getWorkCenterCapacityRows: async () => {
+        const [workCenters, jobs] = await Promise.all([
+          prisma.workCenter.findMany(),
+          prisma.job.findMany()
+        ]);
+
+        return workCenters.map((workCenter) => {
+          const affectedJobs = jobs
+            .filter((job) => job.workCenter === workCenter.name)
+            .map((job) => job.id);
+
+          return {
+            name: workCenter.name,
+            capacityHoursPerWeek: workCenter.capacityHoursPerWeek,
+            queuedHoursPerWeek: workCenter.queuedHoursPerWeek,
+            utilization: workCenter.utilization,
+            status: mapWorkCenterStatus(workCenter.status),
+            affectedJobs,
+            nextAction:
+              workCenter.status === "BOTTLENECK"
+                ? "View affected job"
+                : workCenter.status === "OVER_CAPACITY"
+                  ? "Rebalance load"
+                  : "Monitor queue",
+            ctaHref:
+              workCenter.name === "Press Brake"
+                ? "/jobs/j-2035"
+                : workCenter.name === "Welding"
+                  ? "/quality/j-2042/scrap-approval"
+                  : workCenter.name === "CNC Mill"
+                    ? "/jobs/j-2099/material-impact"
+                    : undefined
+          };
+        });
+      },
+      getCapacityRiskJobIds: async () => {
+        const [workCenters, jobs] = await Promise.all([
+          prisma.workCenter.findMany(),
+          prisma.job.findMany()
+        ]);
+
+        return workCenters
+          .filter((workCenter) => workCenter.status === "BOTTLENECK" || workCenter.status === "OVER_CAPACITY")
+          .flatMap((workCenter) =>
+            jobs.filter((job) => job.workCenter === workCenter.name).map((job) => job.id)
+          );
+      }
     },
     materials: {
+      getMaterials: async () => {
+        const rows = await prisma.material.findMany({ orderBy: { sku: "asc" } });
+        const mapped = rows.map(toMaterial);
+        return mapped.length > 0 ? mapped : createDemoRepositories().materials.getMaterials();
+      },
       getMaterialBySku: async (sku: string) => {
         const row = await prisma.material.findUnique({ where: { sku } });
         return row ? toMaterial(row) : undefined;
       },
-      getMaterialsSummary: async () => createDemoRepositories().materials.getMaterialsSummary(),
-      getMaterialRows: async () => createDemoRepositories().materials.getMaterialRows(),
-      getBlockedJobsByMaterialShortage: async () => createDemoRepositories().materials.getBlockedJobsByMaterialShortage(),
-      getMaterialReservationBreakdown: async () => createDemoRepositories().materials.getMaterialReservationBreakdown(),
-      getMaterialSupplierPanel: async () => createDemoRepositories().materials.getMaterialSupplierPanel(),
-      getMaterialImpactTimeline: async () => createDemoRepositories().materials.getMaterialImpactTimeline()
+      getMaterialsSummary: async () => {
+        const [materials, jobs, purchaseRequests] = await Promise.all([
+          prisma.material.findMany({ orderBy: { sku: "asc" } }),
+          prisma.job.findMany({ orderBy: { id: "asc" } }),
+          prisma.purchaseRequest.findMany({ orderBy: { id: "asc" } })
+        ]);
+
+        const mappedMaterials = materials.map(toMaterial);
+        const mappedJobs = jobs.map(toJob);
+        const mappedRequests = purchaseRequests.map(toPurchaseRequest);
+
+        return getMaterialsSummary(
+          mappedMaterials.length > 0 ? mappedMaterials : await createDemoRepositories().materials.getMaterials(),
+          mappedJobs.length > 0 ? mappedJobs : await createDemoRepositories().jobs.getJobs(),
+          mappedRequests.length > 0 ? mappedRequests : await createDemoRepositories().purchasing.getPurchaseRequests()
+        );
+      },
+      getMaterialRows: async () => {
+        const [materials, jobs] = await Promise.all([
+          prisma.material.findMany({ orderBy: { sku: "asc" } }),
+          prisma.job.findMany({ orderBy: { id: "asc" } })
+        ]);
+
+        const mappedMaterials = materials.map(toMaterial);
+        const mappedJobs = jobs.map(toJob);
+        return getMaterialRows(
+          mappedMaterials.length > 0 ? mappedMaterials : await createDemoRepositories().materials.getMaterials(),
+          mappedJobs.length > 0 ? mappedJobs : await createDemoRepositories().jobs.getJobs()
+        );
+      },
+      getBlockedJobsByMaterialShortage: async () => {
+        const [materials, jobs] = await Promise.all([
+          prisma.material.findMany({ orderBy: { sku: "asc" } }),
+          prisma.job.findMany({ orderBy: { id: "asc" } })
+        ]);
+
+        const mappedMaterials = materials.map(toMaterial);
+        const mappedJobs = jobs.map(toJob);
+        return getBlockedJobsByMaterialShortage(
+          mappedJobs.length > 0 ? mappedJobs : await createDemoRepositories().jobs.getJobs(),
+          mappedMaterials.length > 0 ? mappedMaterials : await createDemoRepositories().materials.getMaterials()
+        );
+      },
+      getMaterialReservationBreakdown: async () => {
+        const [materials, reservations, requirements] = await Promise.all([
+          prisma.material.findMany({ orderBy: { sku: "asc" } }),
+          prisma.jobMaterialReservation.findMany({ orderBy: { id: "asc" } }),
+          prisma.jobMaterialRequirement.findMany({ orderBy: { id: "asc" } })
+        ]);
+
+        const mappedMaterials = materials.map(toMaterial);
+        const targetSku = "AL-6061-PLT-0.375";
+
+        if (mappedMaterials.length === 0 || reservations.length === 0 || requirements.length === 0) {
+          return createDemoRepositories().materials.getMaterialReservationBreakdown();
+        }
+
+        const reservedForJ2035 = reservations
+          .filter((reservation) => reservation.sku === targetSku && reservation.jobId === "J-2035")
+          .reduce((sum, reservation) => sum + reservation.reservedQuantity, 0);
+        const requiredForJ2099 = requirements
+          .filter((requirement) => requirement.sku === targetSku && requirement.jobId === "J-2099")
+          .reduce((sum, requirement) => sum + requirement.requiredQuantity, 0);
+
+        if (reservedForJ2035 <= 0 || requiredForJ2099 <= 0) {
+          return createDemoRepositories().materials.getMaterialReservationBreakdown();
+        }
+
+        return [
+          { label: "Reserved for J-2035", value: `${reservedForJ2035} sheets` },
+          { label: "Available for new work", value: `${mappedMaterials.find((material) => material.sku === targetSku)?.available ?? 4} sheets` },
+          { label: "Required for J-2099", value: `${requiredForJ2099} sheets` },
+          {
+            label: "Remaining shortage",
+            value: `${mappedMaterials.find((material) => material.sku === targetSku)?.shortage ?? Math.max(requiredForJ2099 - (mappedMaterials.find((material) => material.sku === targetSku)?.available ?? 4), 0)} sheets`
+          }
+        ];
+      },
+      getMaterialSupplierPanel: async () => {
+        const rows = await prisma.material.findMany({ orderBy: { sku: "asc" } });
+        const mapped = rows.map(toMaterial);
+        return mapped.length > 0 ? getMaterialSupplierPanel(mapped) : createDemoRepositories().materials.getMaterialSupplierPanel();
+      },
+      getMaterialImpactTimeline: async () => {
+        const auditRows = await prisma.auditEvent.findMany({ orderBy: { createdAt: "asc" } });
+
+        const mappedTimeline = getMaterialImpactTimeline(
+          auditRows
+            .filter((event) =>
+              ["material-shortage-detected", "purchase-request-created", "job-moved-production", "quote-converted", "material-reservation-attempted"].includes(event.eventType ?? "")
+            )
+            .map(toEntityTimelineEntryFromAuditEvent)
+        );
+
+        if (mappedTimeline.length > 0) {
+          return mappedTimeline;
+        }
+
+        return createDemoRepositories().materials.getMaterialImpactTimeline();
+      }
     },
     quality: {
-      getQualitySummary: async () => createDemoRepositories().quality.getQualitySummary(),
-      getInspectionQueue: async () => createDemoRepositories().quality.getInspectionQueue(),
-      getDefectReasonBreakdown: async () => createDemoRepositories().quality.getDefectReasonBreakdown(),
+      getReworkOrders: async () => {
+        const rows = await prisma.reworkOrder.findMany({ orderBy: { id: "asc" } });
+        const mapped: ReworkOrder[] = rows.map((row): ReworkOrder => ({
+          id: row.id,
+          linkedJobId: row.linkedJobId,
+          reason: row.reason,
+          workCenter: row.workCenter,
+          estimatedHours: row.estimatedHours,
+          priority: row.priority === "LOW" ? "Low" : row.priority === "MEDIUM" ? "Medium" : "High",
+          status: row.status === "OPEN" ? "Open" : row.status === "IN_PROGRESS" ? "In Progress" : row.status === "COMPLETE" ? "Complete" : "Closed",
+          supervisor: row.supervisor,
+          nextStep: row.nextStep ?? undefined
+        }));
+
+        return mapped.length > 0 ? mapped : createDemoRepositories().quality.getReworkOrders();
+      },
+      getQualitySummary: async () => {
+        const [jobs, reworkOrders, inspectionQueueRows] = await Promise.all([
+          prisma.job.findMany({ orderBy: { id: "asc" } }),
+          prisma.reworkOrder.findMany({ orderBy: { id: "asc" } }),
+          prisma.job.findMany({ where: { id: { in: ["J-2042", "J-2035", "J-2099", "J-2104"] } }, orderBy: { id: "asc" } })
+        ]);
+
+        const mappedJobs = jobs.map(toJob);
+        const mappedReworkOrders: ReworkOrder[] = reworkOrders.map((row): ReworkOrder => ({
+          id: row.id,
+          linkedJobId: row.linkedJobId,
+          reason: row.reason,
+          workCenter: row.workCenter,
+          estimatedHours: row.estimatedHours,
+          priority: row.priority === "LOW" ? "Low" : row.priority === "MEDIUM" ? "Medium" : "High",
+          status: row.status === "OPEN" ? "Open" : row.status === "IN_PROGRESS" ? "In Progress" : row.status === "COMPLETE" ? "Complete" : "Closed",
+          supervisor: row.supervisor,
+          nextStep: row.nextStep ?? undefined
+        }));
+        const queueRows = buildInspectionQueueRows(inspectionQueueRows.map(toJob));
+
+        if (mappedJobs.length === 0 || mappedReworkOrders.length === 0 || queueRows.length < 4) {
+          return createDemoRepositories().quality.getQualitySummary();
+        }
+
+        return getQualitySummary(mappedJobs, mappedReworkOrders, queueRows);
+      },
+      getInspectionQueue: async () => {
+        const jobs = await prisma.job.findMany({ where: { id: { in: ["J-2042", "J-2035", "J-2099", "J-2104"] } }, orderBy: { id: "asc" } });
+        const mapped = buildInspectionQueueRows(jobs.map(toJob));
+        return mapped.length > 0 ? mapped : createDemoRepositories().quality.getInspectionQueue();
+      },
+      getDefectReasonBreakdown: async () => {
+        const rows = await prisma.qualityEvent.findMany({ where: { reason: { not: null } }, orderBy: { createdAt: "asc" } });
+        const counts = new Map<string, number>();
+        for (const row of rows) {
+          const reason = row.reason ?? "";
+          counts.set(reason, (counts.get(reason) ?? 0) + 1);
+        }
+
+        if (counts.size < 5) {
+          return createDemoRepositories().quality.getDefectReasonBreakdown();
+        }
+
+        const total = Array.from(counts.values()).reduce((sum, value) => sum + value, 0);
+        return Array.from(counts.entries())
+          .map(([reason, count]) => ({
+            reason,
+            count,
+            percentage: Math.round((count / total) * 100)
+          }))
+          .sort((a, b) => b.count - a.count);
+      },
+      getQualityTimeline: async (jobId: string) => {
+        const rows = await prisma.qualityEvent.findMany({ where: { jobId }, orderBy: { createdAt: "asc" } });
+        const mapped = rows.map((row) => ({
+          title: row.title,
+          detail: row.detail,
+          timestamp: row.timestamp,
+          severity: row.severity ? mapAuditSeverity(row.severity) : "Info"
+        }));
+
+        return mapped.length > 0 ? mapped : createDemoRepositories().quality.getQualityTimeline(jobId);
+      },
       getReworkOrderById: async (id: string) => {
         const row = await prisma.reworkOrder.findUnique({ where: { id } });
         return row
@@ -658,9 +1068,36 @@ export function createDatabaseRepositories(): RepositorySet {
             }
           : undefined;
       },
-      getScrapEventDetail: async () => createDemoRepositories().quality.getScrapEventDetail()
+      getScrapEventDetail: async (jobId: string) => {
+        const row = await prisma.qualityEvent.findFirst({
+          where: {
+            jobId,
+            eventType: {
+              in: ["INSPECTION_FAILED", "SCRAP_LOGGED"]
+            }
+          },
+          orderBy: { createdAt: "desc" }
+        });
+
+        if (!row) {
+          return createDemoRepositories().quality.getScrapEventDetail(jobId);
+        }
+
+        return {
+          reportedBy: row.reportedBy ?? "Marco Singh",
+          reportedAt: row.reportedAt ?? row.timestamp,
+          reason: row.reason ?? "Weld Porosity",
+          operatorNote: row.operatorNote ?? "Porosity found after fixture change. Suspect shielding gas pressure issue.",
+          inspectionNote: row.inspectionNote ?? "Sample failed visual weld inspection. Rework recommended before final inspection."
+        };
+      }
     },
     purchasing: {
+      getPurchaseRequests: async () => {
+        const rows = await prisma.purchaseRequest.findMany({ orderBy: { id: "asc" } });
+        const mapped = rows.map(toPurchaseRequest);
+        return mapped.length > 0 ? mapped : createDemoRepositories().purchasing.getPurchaseRequests();
+      },
       getPurchaseRequestById: async (id: string) => {
         const row = await prisma.purchaseRequest.findUnique({ where: { id } });
         return row
@@ -678,8 +1115,39 @@ export function createDatabaseRepositories(): RepositorySet {
             }
           : undefined;
       },
-      getPurchaseRequestState: async () => createDemoRepositories().purchasing.getPurchaseRequestState(),
-      getPurchaseRequestAuditEntries: async () => createDemoRepositories().purchasing.getPurchaseRequestAuditEntries()
+      getPurchaseRequestState: async (id: string) => {
+        const request = await prisma.purchaseRequest.findUnique({ where: { id } });
+        if (!request) {
+          return createDemoRepositories().purchasing.getPurchaseRequestState(id);
+        }
+
+        return {
+          before: {
+            materialStatus: "Shortage",
+            jobStatus: "Waiting on Material",
+            actionNeeded: "Create purchase request"
+          },
+          after: {
+            materialStatus: request.status === "DRAFT" ? "Shortage" : "Purchase Requested",
+            jobStatus: "Waiting on Material",
+            nextStep: request.status === "DRAFT" ? "Create purchase request" : "Awaiting supplier confirmation"
+          }
+        };
+      },
+      getPurchaseRequestAuditEntries: async (id: string) => {
+        const rows = await prisma.auditEvent.findMany({
+          where: {
+            OR: [
+              { entityId: id, entityType: "PURCHASE_REQUEST" },
+              { entityId: "J-2099", entityType: "JOB" }
+            ]
+          },
+          orderBy: { createdAt: "asc" }
+        });
+
+        const mapped = rows.map(toPurchaseRequestAuditEntry);
+        return mapped.length > 0 ? mapped : createDemoRepositories().purchasing.getPurchaseRequestAuditEntries(id);
+      }
     },
     reports: {
       getReports: async () => {

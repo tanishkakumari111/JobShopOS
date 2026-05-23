@@ -21,7 +21,6 @@ import {
   getMaterialSupplierPanel,
   getMaterialsSummary,
   getPurchaseRequestById,
-  getPurchaseRequestState,
   materialImpactTimeline,
   materials,
   purchaseRequestState,
@@ -29,19 +28,64 @@ import {
   pr3091AuditTrail,
   jobs
 } from "@/lib/demo-data";
+import type {
+  AuditEvent,
+  Material,
+  MaterialAffectedJobRow,
+  MaterialDashboardRow,
+  MaterialReservationBreakdownRow,
+  MaterialTimelineEntry,
+  PurchaseRequest,
+  PurchaseRequestAuditEntry,
+  PurchaseRequestState
+} from "@/lib/demo-data/types";
 import { getEffectiveAuditEvents, getEffectiveJob, getEffectivePurchaseRequest } from "@/lib/demo-state";
 import { cn } from "@/lib/utils";
 
-function useMaterialWorkflowState() {
+type MaterialBaseProps = {
+  baseJobs?: typeof jobs;
+  baseMaterials?: Material[];
+  basePurchaseRequests?: PurchaseRequest[];
+  baseAuditEvents?: AuditEvent[];
+  baseMaterialRows?: MaterialDashboardRow[];
+  baseBlockedJobs?: MaterialAffectedJobRow[];
+  baseReservationBreakdown?: MaterialReservationBreakdownRow[];
+  baseSupplierPanel?: ReturnType<typeof getMaterialSupplierPanel>;
+  baseMaterialImpactTimeline?: MaterialTimelineEntry[];
+  basePurchaseRequestState?: PurchaseRequestState;
+  basePurchaseRequestAuditTrail?: PurchaseRequestAuditEntry[];
+};
+
+function useMaterialWorkflowState({
+  baseJobs = jobs,
+  baseMaterials = materials,
+  basePurchaseRequests = purchaseRequests,
+  baseAuditEvents = auditEvents,
+  baseMaterialRows,
+  baseBlockedJobs,
+  baseReservationBreakdown,
+  baseSupplierPanel,
+  baseMaterialImpactTimeline = materialImpactTimeline,
+  basePurchaseRequestState = purchaseRequestState,
+  basePurchaseRequestAuditTrail = pr3091AuditTrail
+}: MaterialBaseProps = {}) {
   const { state, createPurchaseRequestPR3091 } = useDemoState();
-  const effectiveJobs = useMemo(() => jobs.map((job) => getEffectiveJob(job, state)), [state]);
+  const effectiveJobs = useMemo(() => baseJobs.map((job) => getEffectiveJob(job, state)), [baseJobs, state]);
   const effectivePurchaseRequest = getEffectivePurchaseRequest(
-    getPurchaseRequestById("PR-3091", purchaseRequests)!,
+    getPurchaseRequestById("PR-3091", basePurchaseRequests)!,
     state
   );
   const runtimePurchaseRequestCreated = Boolean(state.purchaseRequests["PR-3091"]?.exists);
-  const effectiveAuditEvents = getEffectiveAuditEvents(auditEvents, state);
-  const material = getMaterialBySku("AL-6061-PLT-0.375", materials)!;
+  const effectiveAuditEvents = getEffectiveAuditEvents(baseAuditEvents, state);
+  const effectiveMaterials = baseMaterials;
+  const material = getMaterialBySku("AL-6061-PLT-0.375", baseMaterials) ?? baseMaterials[0] ?? materials[0];
+  const effectiveMaterialRows = baseMaterialRows ?? getMaterialRows(baseMaterials, effectiveJobs);
+  const effectiveBlockedJobs = baseBlockedJobs ?? getBlockedJobsByMaterialShortage(effectiveJobs, baseMaterials);
+  const effectiveReservationBreakdown =
+    baseReservationBreakdown ?? getMaterialReservationBreakdown(baseMaterials, effectiveJobs);
+  const effectiveSupplierPanel = baseSupplierPanel ?? getMaterialSupplierPanel(baseMaterials);
+  const effectiveMaterialImpactTimeline =
+    baseMaterialImpactTimeline ?? getMaterialImpactTimeline(materialImpactTimeline);
 
   return {
     state,
@@ -50,15 +94,31 @@ function useMaterialWorkflowState() {
     effectivePurchaseRequest,
     runtimePurchaseRequestCreated,
     effectiveAuditEvents,
-    material
+    effectiveMaterials,
+    material,
+    effectiveMaterialRows,
+    effectiveBlockedJobs,
+    effectiveReservationBreakdown,
+    effectiveSupplierPanel,
+    effectiveMaterialImpactTimeline,
+    effectivePurchaseRequestState: basePurchaseRequestState,
+    effectivePurchaseRequestAuditTrail: basePurchaseRequestAuditTrail
   };
 }
 
-export function MaterialDashboardView() {
-  const { effectiveJobs, effectivePurchaseRequest, runtimePurchaseRequestCreated, material } = useMaterialWorkflowState();
-  const summary = getMaterialsSummary(materials, effectiveJobs, [effectivePurchaseRequest]);
-  const blockedJobs = getBlockedJobsByMaterialShortage(effectiveJobs, materials);
-  const rows = getMaterialRows(materials, effectiveJobs).map((row) =>
+export function MaterialDashboardView(props: MaterialBaseProps = {}) {
+  const {
+    effectiveJobs,
+    effectiveMaterials,
+    effectivePurchaseRequest,
+    runtimePurchaseRequestCreated,
+    material,
+    effectiveMaterialRows,
+    effectiveBlockedJobs
+  } = useMaterialWorkflowState(props);
+  const summary = getMaterialsSummary(effectiveMaterials, effectiveJobs, [effectivePurchaseRequest]);
+  const blockedJobs = effectiveBlockedJobs;
+  const rows = effectiveMaterialRows.map((row) =>
     row.sku === material.sku
       ? {
           ...row,
@@ -215,11 +275,18 @@ export function MaterialDashboardView() {
   );
 }
 
-export function MaterialDetailView() {
-  const { effectiveJobs, effectivePurchaseRequest, runtimePurchaseRequestCreated, material } = useMaterialWorkflowState();
-  const rows = getBlockedJobsByMaterialShortage(effectiveJobs, materials);
-  const breakdown = getMaterialReservationBreakdown(materials, effectiveJobs);
-  const supplier = getMaterialSupplierPanel(materials);
+export function MaterialDetailView(props: MaterialBaseProps = {}) {
+  const {
+    effectivePurchaseRequest,
+    runtimePurchaseRequestCreated,
+    material,
+    effectiveBlockedJobs,
+    effectiveReservationBreakdown,
+    effectiveSupplierPanel
+  } = useMaterialWorkflowState(props);
+  const rows = effectiveBlockedJobs;
+  const breakdown = effectiveReservationBreakdown;
+  const supplier = effectiveSupplierPanel;
 
   return (
     <div className="space-y-4">
@@ -387,12 +454,20 @@ export function MaterialDetailView() {
   );
 }
 
-export function MaterialImpactView() {
-  const { effectiveJobs, runtimePurchaseRequestCreated, createPurchaseRequestPR3091, effectiveAuditEvents, material } =
-    useMaterialWorkflowState();
+export function MaterialImpactView(props: MaterialBaseProps = {}) {
+  const {
+    effectiveJobs,
+    runtimePurchaseRequestCreated,
+    createPurchaseRequestPR3091,
+    effectiveAuditEvents,
+    material,
+    effectiveReservationBreakdown,
+    effectiveSupplierPanel,
+    effectiveMaterialImpactTimeline
+  } = useMaterialWorkflowState(props);
   const job = effectiveJobs.find((entry) => entry.id === "J-2099");
-  const supplier = getMaterialSupplierPanel(materials);
-  const timeline = getMaterialImpactTimeline(materialImpactTimeline);
+  const supplier = effectiveSupplierPanel;
+  const timeline = effectiveMaterialImpactTimeline;
 
   return (
     <div className="space-y-4">
@@ -499,7 +574,7 @@ export function MaterialImpactView() {
 
           <TimelineShell title="Inventory breakdown" subtitle="Reservation math that explains the blocked job.">
             <div className="space-y-3">
-              {getMaterialReservationBreakdown(materials, effectiveJobs).map((item) => (
+              {effectiveReservationBreakdown.map((item) => (
                 <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
                   <span className="text-slate-700">{item.label}</span>
                   <span className="font-medium text-slate-950">{item.value}</span>
@@ -625,17 +700,18 @@ export function MaterialImpactView() {
   );
 }
 
-export function PurchaseRequestView() {
-  const { state } = useDemoState();
-  const effectivePurchaseRequest = getEffectivePurchaseRequest(
-    getPurchaseRequestById("PR-3091", purchaseRequests)!,
-    state
-  );
-  const runtimePurchaseRequestCreated = Boolean(state.purchaseRequests["PR-3091"]?.exists);
+export function PurchaseRequestView(props: MaterialBaseProps = {}) {
+  const {
+    runtimePurchaseRequestCreated,
+    effectiveAuditEvents,
+    effectivePurchaseRequestState,
+    effectivePurchaseRequestAuditTrail,
+    effectivePurchaseRequest
+  } = useMaterialWorkflowState(props);
   const auditRecords = runtimePurchaseRequestCreated
-    ? getEffectiveAuditEvents(auditEvents, state).filter((event) => event.entityId === "PR-3091" || event.entityId === "J-2099")
-    : pr3091AuditTrail;
-  const purchaseState = getPurchaseRequestState(purchaseRequestState);
+    ? effectiveAuditEvents.filter((event) => event.entityId === "PR-3091" || event.entityId === "J-2099")
+    : effectivePurchaseRequestAuditTrail;
+  const purchaseState = effectivePurchaseRequestState ?? purchaseRequestState;
 
   return (
     <div className="space-y-4">
