@@ -162,3 +162,15 @@ JOBSHOP_DATA_SOURCE=database DATABASE_URL=... npm run smoke:quote-commands
 ```
 
 The smoke script checks that Q-1003 approves and converts in database mode, that J-2104 and WO-2104 exist, and that rerunning the commands with the same idempotency keys does not duplicate command effects.
+
+## Database Diagnostic
+
+If you want to check whether Prisma Client can connect to the database without involving Prisma Migrate, run:
+
+```bash
+JOBSHOP_DATA_SOURCE=database DATABASE_URL=... npm run db:diagnostic
+```
+
+This diagnostic only checks Prisma Client connectivity by running a simple `SELECT 1` query. It does not prove migrations work.
+
+If `db:diagnostic` passes but `db:migrate` still fails, the issue is likely in Prisma Migrate, the schema engine, or the CLI environment rather than Neon connectivity.
