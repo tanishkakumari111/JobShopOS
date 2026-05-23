@@ -15,6 +15,31 @@ import { CustomerSafeViewLabel } from "@/components/customer-safe-view-label";
 import { PrintHeader } from "@/components/print-header";
 import { PrintFooter } from "@/components/print-footer";
 import { PrintButton } from "@/components/print-button";
+import {
+  CustomerDetailView,
+  CustomerReportPrintView,
+  CustomerReportView,
+  CustomerServiceCommandCenterView,
+  CustomerServiceJobView
+} from "@/components/customer-report-workflow-pages";
+import {
+  ApprovalsView,
+  AuditTrailView,
+  EntityTimelineView,
+  QuoteConversionView,
+  QuoteDetailView
+} from "@/components/quote-workflow-pages";
+import {
+  MaterialDashboardView,
+  MaterialDetailView,
+  MaterialImpactView,
+  PurchaseRequestView
+} from "@/components/material-workflow-pages";
+import {
+  QualityDashboardView,
+  ReworkCreatedView,
+  ScrapApprovalView
+} from "@/components/quality-workflow-pages";
 import { routeMeta, type RouteKey } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import {
@@ -98,12 +123,14 @@ function PageHeader({
   title,
   summary,
   action,
-  audience
+  audience,
+  hideActions = false
 }: {
   title: string;
   summary: string;
   action: string;
   audience: "internal" | "customer";
+  hideActions?: boolean;
 }) {
   return (
     <div className="rounded-md border border-slate-200 bg-white p-4 shadow-none">
@@ -115,22 +142,24 @@ function PageHeader({
           </div>
           <p className="max-w-4xl text-sm leading-6 text-slate-500">{summary}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-text transition hover:border-accent/30 hover:text-accent"
-          >
-            <Plus className="h-4 w-4" />
-            Secondary action
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-          >
-            <FileText className="h-4 w-4" />
-            {action}
-          </button>
-        </div>
+        {!hideActions ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-text transition hover:border-accent/30 hover:text-accent"
+            >
+              <Plus className="h-4 w-4" />
+              Secondary action
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+            >
+              <FileText className="h-4 w-4" />
+              {action}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1111,6 +1140,8 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "quality":
+      return <QualityDashboardView />;
+
       {
         const summary = getQualitySummary(jobs, reworkOrders, inspectionQueueRows);
         const inspectionQueue = getInspectionQueue(inspectionQueueRows);
@@ -1242,6 +1273,8 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "quality-scrap":
+      return <ScrapApprovalView />;
+
       {
         const job = getJobById("J-2042", jobs);
         const rework = getReworkOrderById("RW-2042-01", reworkOrders);
@@ -1417,6 +1450,8 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "quality-rework":
+      return <ReworkCreatedView />;
+
       {
         const rework = getReworkOrderById("RW-2042-01", reworkOrders);
 
@@ -1574,6 +1609,8 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "materials":
+      return <MaterialDashboardView />;
+
       {
         const summary = getMaterialsSummary(materials, jobs, purchaseRequests);
         const rows = getMaterialRows(materials, jobs);
@@ -1711,6 +1748,8 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "material-al6061":
+      return <MaterialDetailView />;
+
       {
         const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
         const rows = getBlockedJobsByMaterialShortage(jobs, materials);
@@ -1820,6 +1859,8 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "job-2099-material":
+      return <MaterialImpactView />;
+
       {
         const job = getJobById("J-2099", jobs);
         const material = getMaterialBySku("AL-6061-PLT-0.375", materials);
@@ -1952,6 +1993,8 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "purchase-request":
+      return <PurchaseRequestView />;
+
       {
         const pr = getPurchaseRequestById("PR-3091", purchaseRequests);
         const state = getPurchaseRequestState(purchaseRequestState);
@@ -2391,6 +2434,7 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "quote-1003":
+      return <QuoteDetailView />;
       {
         const quote = getQuoteById("Q-1003", quotes);
         const quoteEvents = getAuditEventsByEntity("quote", "Q-1003", auditEvents);
@@ -2613,6 +2657,7 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "approvals":
+      return <ApprovalsView />;
       {
         const approvalRows = getApprovalQueueRows(quotes);
         const pendingValue = approvalRows.reduce((sum, row) => sum + row.amount, 0);
@@ -2729,6 +2774,7 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "quote-convert":
+      return <QuoteConversionView />;
       {
         const quote = getQuoteById("Q-1003", quotes);
         const quoteApproved = getAuditEventsByEntity("quote", "Q-1003", auditEvents);
@@ -2871,6 +2917,7 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "customer-service":
+      return <CustomerServiceCommandCenterView />;
       {
         const summary = getCustomerServiceSummary(jobs, reports);
         const riskQueue = getCustomerRiskQueue(jobs);
@@ -2996,6 +3043,7 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "customer-metrofab":
+      return <CustomerDetailView />;
       {
         const customerJobs = jobs.filter((job) => job.customerSlug === "metrofab-industries" || job.id === "J-2035");
 
@@ -3112,6 +3160,7 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "customer-service-job":
+      return <CustomerServiceJobView />;
       {
         const customerSafe = getCustomerSafeJobStatus("J-2035", jobs);
         const customerSafeSummary =
@@ -3229,6 +3278,7 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "customer-report":
+      return <CustomerReportView />;
       {
         const customerReport = getCustomerStatusReports(customerStatusReport, customerSafeTimeline);
 
@@ -3330,6 +3380,7 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "customer-report-print":
+      return <CustomerReportPrintView />;
       {
         const customerReport = customerStatusReport;
 
@@ -3414,6 +3465,7 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "audit":
+      return <AuditTrailView />;
       {
         const founderAuditEvents = auditEvents.filter((event) => event.id !== 16);
         const summary = getAuditSummary(founderAuditEvents);
@@ -3562,6 +3614,7 @@ function routeBlocks(routeKey: RouteKey) {
       }
 
     case "audit-job":
+      return <EntityTimelineView />;
       {
         const entityTimeline = getJ2035EntityTimeline();
         const auditRecords = auditEvents.filter((event) =>
@@ -3789,6 +3842,7 @@ export function RoutePage({ routeKey }: { routeKey: RouteKey }) {
         summary={meta.summary}
         action={meta.action}
         audience={meta.audience}
+        hideActions={meta.suppressShellActions ?? false}
       />
 
       <PresenterNote

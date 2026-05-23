@@ -35,6 +35,7 @@ export type RouteMeta = {
   audience: "internal" | "customer";
   demoStep?: DemoStep["stepNumber"];
   presenterNote?: string;
+  suppressShellActions?: boolean;
 };
 
 export const routeMeta: Record<RouteKey, RouteMeta> = {
@@ -102,6 +103,7 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
     action: "Approve scrap",
     audience: "internal",
     demoStep: 5,
+    suppressShellActions: true,
     presenterNote:
       "Scrap above tolerance blocks production. A supervisor must decide whether to approve scrap, reject the log, or hold the job for engineering review."
   },
@@ -112,6 +114,7 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
     action: "Open rework",
     audience: "internal",
     demoStep: 6,
+    suppressShellActions: true,
     presenterNote:
       "The issue is no longer just a note in a spreadsheet. JobShop OS turns the quality failure into controlled rework with full traceability."
   },
@@ -140,6 +143,7 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
     action: "Create purchase request",
     audience: "internal",
     demoStep: 7,
+    suppressShellActions: true,
     presenterNote:
       "Material shortage is not just an inventory issue. It directly blocks production readiness and changes the schedule."
   },
@@ -150,6 +154,7 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
     action: "Review high-value quote",
     audience: "internal",
     demoStep: 8,
+    suppressShellActions: true,
     presenterNote:
       "Instead of a buyer manually chasing spreadsheets, JobShop OS creates a purchase request directly from the blocked job and links it back to production readiness."
   },
@@ -174,6 +179,7 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
     action: "Open Owner Approval Queue",
     audience: "internal",
     demoStep: 9,
+    suppressShellActions: true,
     presenterNote:
       "Now we move upstream to quoting. JobShop OS does not let high-value work enter production without owner approval."
   },
@@ -184,6 +190,7 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
     action: "Approve quote",
     audience: "internal",
     demoStep: 9,
+    suppressShellActions: true,
     presenterNote:
       "The Owner / GM can review high-value opportunities, margin, timing, and risk before approving production commitment."
   },
@@ -194,6 +201,7 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
     action: "Convert to job",
     audience: "internal",
     demoStep: 10,
+    suppressShellActions: true,
     presenterNote:
       "Once approved, the quote can now become real production work. The system carries forward routing, materials, supervisors, and audit history."
   },
@@ -217,7 +225,8 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
     summary: "Customer-safe summary of J-2035 progress and estimated completion.",
     action: "Generate status report",
     audience: "customer",
-    demoStep: 11
+    demoStep: 11,
+    suppressShellActions: true
   },
   "customer-report": {
     path: "/reports/customer-status/j-2035",
@@ -225,7 +234,8 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
     summary: "Customer-ready status report assembled from the live operational record.",
     action: "Print report",
     audience: "customer",
-    demoStep: 11
+    demoStep: 11,
+    suppressShellActions: true
   },
   "customer-report-print": {
     path: "/reports/customer-status/j-2035/print",
@@ -233,7 +243,8 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
     summary: "Print-ready customer report using the same report skeleton.",
     action: "Print report",
     audience: "customer",
-    demoStep: 12
+    demoStep: 12,
+    suppressShellActions: true
   },
   audit: {
     path: "/audit",
@@ -242,6 +253,7 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
     action: "Export audit CSV",
     audience: "internal",
     demoStep: 13,
+    suppressShellActions: true,
     presenterNote:
       "The final proof is traceability. JobShop OS records who did what, when, from quote approval to production updates, rework, purchasing, and customer communication."
   },
@@ -252,6 +264,7 @@ export const routeMeta: Record<RouteKey, RouteMeta> = {
     action: "View final demo summary",
     audience: "internal",
     demoStep: 13,
+    suppressShellActions: true,
     presenterNote:
       "Show the connected lineage for a single job so the team can see how quote approval, production, reporting, and audit all point back to the same record."
   },

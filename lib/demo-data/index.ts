@@ -125,6 +125,7 @@ export type {
   ProductionQueueRow,
   QualitySummary,
   QualityTimelineEntry,
+  CustomerStatusReport,
   ProductionUpdate,
   FinalValuePillar,
   Report,

@@ -181,7 +181,9 @@ export function getDashboardMetrics(
   const jobsDueThisWeek = jobs.filter((job) => job.dueDate === "Friday").length;
   const scrapReworkCount =
     jobs.filter((job) => job.status === "Scrap Approval Required").length + reworkOrders.length;
-  const materialBlockers = jobs.filter((job) => job.status === "Waiting on Material").length;
+  const materialBlockers = jobs.filter(
+    (job) => job.status === "Waiting on Material" || job.status === "Purchase Requested"
+  ).length;
   const capacityBottlenecks = workCenters.filter((workCenter) => workCenter.status === "Bottleneck").length;
 
   return {
@@ -337,7 +339,9 @@ export function getMaterialsSummary(
   const belowReorderPoint = materials.filter(
     (material) => material.available <= (material.reorderPoint ?? material.requiredSheets)
   ).length;
-  const jobsBlockedByShortage = jobs.filter((job) => job.status === "Waiting on Material").length;
+  const jobsBlockedByShortage = jobs.filter(
+    (job) => job.status === "Waiting on Material" || job.status === "Purchase Requested"
+  ).length;
   const openPurchaseRequests = purchaseRequests.filter((request) => request.status === "Submitted").length;
   const incomingPosThisWeek = purchaseRequests.filter((request) => request.status === "Submitted").length;
   const reservedInventoryValue = materials.reduce((sum, material) => sum + material.reserved * material.lastPurchasePrice, 0);
@@ -382,7 +386,12 @@ export function getBlockedJobsByMaterialShortage(jobs: Job[], materials: Materia
   const shortageBySku = new Map(materials.map((material) => [material.sku, material.shortage]));
 
   return jobs
-    .filter((job) => job.status === "Waiting on Material" || (job.requiredMaterial && (shortageBySku.get(job.requiredMaterial) ?? 0) > 0))
+    .filter(
+      (job) =>
+        job.status === "Waiting on Material" ||
+        job.status === "Purchase Requested" ||
+        (job.requiredMaterial && (shortageBySku.get(job.requiredMaterial) ?? 0) > 0)
+    )
     .map((job) => ({
       jobId: job.id,
       customerName: job.customerName,
@@ -521,7 +530,11 @@ export function getProductionQueue(jobs: Job[]): ProductionQueueRow[] {
       customerName: job.customerName,
       part: job.part,
       status: job.status,
-      currentStep: job.currentStep ?? (job.status === "Waiting on Material" ? "Blocked" : "Routing"),
+      currentStep:
+        job.currentStep ??
+        (job.status === "Waiting on Material" || job.status === "Purchase Requested"
+          ? "Blocked"
+          : "Routing"),
       workCenter: job.workCenter,
       risk: job.risk,
       nextAction:
@@ -587,6 +600,7 @@ export function getCustomerSafeJobStatus(jobId: string, jobs: Job[]): CustomerSa
   const summaryMap: Record<string, string> = {
     "In Production": "The shop is actively working the order.",
     "Waiting on Material": "The order is waiting on incoming material.",
+    "Purchase Requested": "The order is waiting on supplier confirmation.",
     "Scrap Approval Required": "A quality disposition decision is pending.",
     Approved: "The job has been released to production.",
     "Ready to Ship": "The job is complete and waiting for shipment."
@@ -603,6 +617,8 @@ export function getCustomerSafeJobStatus(jobId: string, jobs: Job[]): CustomerSa
         ? "Inspection"
         : job.status === "Waiting on Material"
           ? "Material receipt"
+          : job.status === "Purchase Requested"
+            ? "Supplier confirmation"
           : job.status === "Scrap Approval Required"
             ? "Disposition"
             : "Next step",
@@ -618,7 +634,9 @@ export function getCustomerServiceSummary(jobs: Job[], reports: Report[]): Custo
     jobsDueThisWeek: jobs.filter((job) => job.dueDate === "Friday" || job.dueDate.includes("days")).length,
     jobsAtRisk: jobs.filter((job) => job.risk === "Watch" || job.risk === "High" || job.risk === "Critical").length,
     jobsReadyToShip: jobs.filter((job) => job.status === "Ready to Ship").length,
-    jobsWaitingOnMaterial: jobs.filter((job) => job.status === "Waiting on Material").length,
+    jobsWaitingOnMaterial: jobs.filter(
+      (job) => job.status === "Waiting on Material" || job.status === "Purchase Requested"
+    ).length,
     reportsGeneratedToday: reports.filter((report) => report.generatedAt === "Today").length
   };
 }

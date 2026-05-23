@@ -153,6 +153,7 @@ export type Job = {
   status:
     | "Approved"
     | "Waiting on Material"
+    | "Purchase Requested"
     | "Materials Reserved"
     | "In Production"
     | "In Quality"
@@ -168,6 +169,8 @@ export type Job = {
   dueDate: string;
   workOrder?: string;
   reworkOrder?: string;
+  purchaseRequestId?: string;
+  reportGenerated?: boolean;
   requiredMaterial?: string;
   shortageSheets?: number;
   sourceQuoteId?: string;

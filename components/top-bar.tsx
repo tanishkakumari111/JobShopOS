@@ -2,6 +2,7 @@
 
 import { Bell, Search, Sparkles, SquareArrowOutUpRight } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { DemoResetButton } from "@/components/demo-reset-button";
 import { routeMetaByPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { RoleSwitcher } from "@/components/role-switcher";
@@ -32,6 +33,7 @@ export function TopBar() {
             <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
             Demo Data
           </div>
+          <DemoResetButton />
           <button
             type="button"
             className="relative flex h-10 w-10 items-center justify-center rounded-sm border border-slate-300 bg-white transition hover:border-accent/30 hover:text-accent"

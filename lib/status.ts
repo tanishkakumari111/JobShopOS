@@ -74,6 +74,7 @@ export const quoteStatuses = [
 export const jobStatuses = [
   "Approved",
   "Waiting on Material",
+  "Purchase Requested",
   "Materials Reserved",
   "In Production",
   "In Quality",
