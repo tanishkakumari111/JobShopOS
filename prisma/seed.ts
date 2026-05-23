@@ -763,7 +763,38 @@ async function seedQuality(tx: Prisma.TransactionClient) {
       }
     });
   }
+}
 
+async function seedReworkOrders(tx: Prisma.TransactionClient) {
+  for (const reworkOrder of reworkOrders) {
+    await tx.reworkOrder.upsert({
+      where: { id: reworkOrder.id },
+      update: {
+        linkedJobId: reworkOrder.linkedJobId,
+        reason: reworkOrder.reason,
+        workCenter: reworkOrder.workCenter,
+        estimatedHours: reworkOrder.estimatedHours,
+        priority: "HIGH",
+        status: "OPEN",
+        supervisor: reworkOrder.supervisor,
+        nextStep: reworkOrder.nextStep
+      },
+      create: {
+        id: reworkOrder.id,
+        linkedJobId: reworkOrder.linkedJobId,
+        reason: reworkOrder.reason,
+        workCenter: reworkOrder.workCenter,
+        estimatedHours: reworkOrder.estimatedHours,
+        priority: "HIGH",
+        status: "OPEN",
+        supervisor: reworkOrder.supervisor,
+        nextStep: reworkOrder.nextStep
+      }
+    });
+  }
+}
+
+async function seedQualityEvents(tx: Prisma.TransactionClient) {
   await tx.qualityEvent.upsert({
     where: { id: "J-2042-SCRAP-DETAIL" },
     update: {
@@ -835,33 +866,6 @@ async function seedQuality(tx: Prisma.TransactionClient) {
       reworkOrderId: "RW-2042-01"
     }
   });
-
-  for (const reworkOrder of reworkOrders) {
-    await tx.reworkOrder.upsert({
-      where: { id: reworkOrder.id },
-      update: {
-        linkedJobId: reworkOrder.linkedJobId,
-        reason: reworkOrder.reason,
-        workCenter: reworkOrder.workCenter,
-        estimatedHours: reworkOrder.estimatedHours,
-        priority: "HIGH",
-        status: "OPEN",
-        supervisor: reworkOrder.supervisor,
-        nextStep: reworkOrder.nextStep
-      },
-      create: {
-        id: reworkOrder.id,
-        linkedJobId: reworkOrder.linkedJobId,
-        reason: reworkOrder.reason,
-        workCenter: reworkOrder.workCenter,
-        estimatedHours: reworkOrder.estimatedHours,
-        priority: "HIGH",
-        status: "OPEN",
-        supervisor: reworkOrder.supervisor,
-        nextStep: reworkOrder.nextStep
-      }
-    });
-  }
 }
 
 async function seedPurchasing(tx: Prisma.TransactionClient) {
@@ -1085,7 +1089,9 @@ async function main() {
     await seedMaterials(tx);
     await seedQuotes(tx);
     await seedJobs(tx);
+    await seedReworkOrders(tx);
     await seedQuality(tx);
+    await seedQualityEvents(tx);
     await seedPurchasing(tx);
     await seedReports(tx);
     await seedAudit(tx);
