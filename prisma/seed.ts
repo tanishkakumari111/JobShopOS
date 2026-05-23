@@ -5,7 +5,6 @@ import {
   JobRisk as PrismaJobRisk,
   JobStatus as PrismaJobStatus,
   Prisma,
-  PrismaClient,
   ProductionUpdateStatus as PrismaProductionUpdateStatus,
   PurchaseRequestPriority as PrismaPurchaseRequestPriority,
   PurchaseRequestStatus as PrismaPurchaseRequestStatus,
@@ -39,8 +38,7 @@ import {
   reports,
   workCenters
 } from "../lib/demo-data";
-
-const prisma = new PrismaClient();
+import { getPrismaClient } from "../lib/db/prisma";
 
 function slugify(value: string) {
   return value
@@ -1079,6 +1077,8 @@ async function seedAudit(tx: Prisma.TransactionClient) {
 }
 
 async function main() {
+  const prisma = getPrismaClient();
+
   await prisma.$transaction(async (tx) => {
     await seedCustomers(tx);
     await seedWorkCenters(tx);
@@ -1094,10 +1094,12 @@ async function main() {
 
 main()
   .then(async () => {
+    const prisma = getPrismaClient();
     await prisma.$disconnect();
   })
   .catch(async (error) => {
     console.error(error);
+    const prisma = getPrismaClient();
     await prisma.$disconnect();
     process.exit(1);
   });
