@@ -107,7 +107,8 @@ Use `DIRECT_URL` for Prisma CLI commands such as migration and introspection whe
 
 ```bash
 npm run db:generate
-npm run db:migrate
+npm run db:migrate:dev
+npm run db:migrate:deploy
 npm run db:seed
 npm run db:studio
 ```
@@ -164,7 +165,7 @@ It converts an approved quote into a job and work order in database mode, genera
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:
 
 ```bash
-JOBSHOP_DATA_SOURCE=database DATABASE_URL=... npm run db:migrate
+JOBSHOP_DATA_SOURCE=database DATABASE_URL=... npm run db:migrate:deploy
 JOBSHOP_DATA_SOURCE=database DATABASE_URL=... npm run db:seed
 JOBSHOP_DATA_SOURCE=database DATABASE_URL=... npm run smoke:quote-commands
 ```
@@ -197,8 +198,14 @@ The workflow runs on `ubuntu-latest` and executes:
 1. `npm ci`
 2. `npx prisma validate`
 3. `npx prisma generate`
-4. `npm run db:migrate`
+4. `npm run db:migrate:deploy`
 5. `npm run db:seed`
 6. `npm run smoke:quote-commands`
 
 This exists to isolate the native Windows Prisma schema-engine failure mode from actual Neon connectivity or schema problems. If the Linux workflow passes but native Windows migrate still fails, the issue is likely the local Windows Prisma CLI/schema-engine environment rather than the schema or database.
+
+## Migrate Dev vs Deploy
+
+- Use `npm run db:migrate:dev` during local development when you are iterating on schema changes.
+- Use `npm run db:migrate:deploy` in CI, staging, and production where commands must be non-interactive.
+- If Neon has a migration recorded that is missing locally, either use a fresh disposable branch/database or reconcile the migration history before running deploy. Do not use `migrate dev` in CI to try to recover from drift because it is interactive and can prompt for a destructive reset.
