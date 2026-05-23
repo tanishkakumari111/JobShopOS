@@ -1,5 +1,3 @@
-import "server-only";
-
 import type { Prisma, QuoteStatus } from "@prisma/client";
 
 import { quoteMaterialEstimateRows, quoteRoutingEstimateRows } from "@/lib/demo-data";

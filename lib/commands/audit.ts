@@ -1,5 +1,3 @@
-import "server-only";
-
 import type { AuditSeverity as PrismaAuditSeverity, AuditEntityType as PrismaAuditEntityType, Prisma } from "@prisma/client";
 import type { Prisma as PrismaNamespace } from "@prisma/client";
 
@@ -61,4 +59,3 @@ export async function writeAuditEvents(tx: PrismaTransaction, events: PreparedAu
     )
   );
 }
-

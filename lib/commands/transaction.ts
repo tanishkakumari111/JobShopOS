@@ -1,5 +1,3 @@
-import "server-only";
-
 import type { Prisma } from "@prisma/client";
 
 import { getDataSourceMode, isDatabaseMode } from "@/lib/data-source";

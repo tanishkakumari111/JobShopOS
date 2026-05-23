@@ -1,5 +1,3 @@
-import "server-only";
-
 import type { Prisma, WorkflowCommandStatus as PrismaWorkflowCommandStatus } from "@prisma/client";
 
 import { createConflictError } from "./errors";

@@ -11,6 +11,19 @@ import { SeverityBadge } from "@/components/severity-badge";
 import { StatusBadge } from "@/components/status-badge";
 import { TimelineShell } from "@/components/timeline-shell";
 import { useDemoState } from "@/components/demo-state-provider";
+import type {
+  AuditEvent,
+  AuditQuickFilter,
+  AuditSummary,
+  AuditTimelineRow,
+  EntityTimelineEntry,
+  Quote,
+  QuoteApprovalHistoryEntry,
+  QuoteConversionRecord,
+  QuoteFormSnapshot,
+  QuoteMaterialEstimateRow,
+  QuoteRoutingEstimateRow
+} from "@/lib/demo-data/types";
 import {
   auditEvents,
   getAuditSummary,
@@ -18,10 +31,10 @@ import {
   getQuoteById,
   q1003ApprovalHistory,
   q1003ConversionRecord,
+  q1003QuoteForm,
   quoteMaterialEstimateRows,
   quoteRoutingEstimateRows,
-  quotes,
-  getJ2035EntityTimeline
+  quotes
 } from "@/lib/demo-data";
 import { requiresOwnerApproval } from "@/lib/demo-data";
 import { getEffectiveAuditEvents, getEffectiveQuote } from "@/lib/demo-state";
@@ -51,10 +64,28 @@ function getAuditHref(entityType: string, entityId: string) {
   return "/audit";
 }
 
-export function QuoteDetailView() {
+type QuoteDetailViewProps = {
+  quote?: Quote;
+  auditEvents?: AuditEvent[];
+  approvalHistory?: QuoteApprovalHistoryEntry[];
+  routingEstimateRows?: QuoteRoutingEstimateRow[];
+  materialEstimateRows?: QuoteMaterialEstimateRow[];
+  quoteForm?: QuoteFormSnapshot;
+  conversionRecord?: QuoteConversionRecord;
+};
+
+export function QuoteDetailView({
+  quote: baseQuote,
+  auditEvents: baseAuditEvents,
+  approvalHistory = q1003ApprovalHistory,
+  routingEstimateRows = quoteRoutingEstimateRows,
+  materialEstimateRows = quoteMaterialEstimateRows,
+  quoteForm = q1003QuoteForm,
+  conversionRecord = q1003ConversionRecord
+}: QuoteDetailViewProps = {}) {
   const { state } = useDemoState();
-  const quote = getEffectiveQuote(getQuoteById("Q-1003", quotes)!, state);
-  const effectiveAuditEvents = getEffectiveAuditEvents(auditEvents, state);
+  const quote = getEffectiveQuote(baseQuote ?? getQuoteById("Q-1003", quotes)!, state);
+  const effectiveAuditEvents = getEffectiveAuditEvents(baseAuditEvents ?? auditEvents, state);
   const quoteAuditEvents = effectiveAuditEvents.filter((event) =>
     ["Q-1003", "WO-2104", "J-2104"].includes(event.entityId)
   );
@@ -190,7 +221,7 @@ export function QuoteDetailView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {quoteRoutingEstimateRows.map((step) => (
+                {routingEstimateRows.map((step) => (
                   <tr key={step.operation}>
                     <td className="px-4 py-3">{step.operation}</td>
                     <td className="px-4 py-3">{step.workCenter}</td>
@@ -215,7 +246,7 @@ export function QuoteDetailView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {quoteMaterialEstimateRows.map((material) => (
+                {materialEstimateRows.map((material) => (
                   <tr key={material.sku}>
                     <td className="px-4 py-3 font-mono text-[13px]">{material.sku}</td>
                     <td className="px-4 py-3">{material.materialName}</td>
@@ -268,15 +299,15 @@ export function QuoteDetailView() {
                   <div className="mt-2 grid gap-2 text-sm text-emerald-900">
                     <div className="flex items-center justify-between">
                       <span>Job</span>
-                      <EntityLink href="/quotes/q-1003/convert">{q1003ConversionRecord.jobNumber}</EntityLink>
+                      <EntityLink href="/quotes/q-1003/convert">{conversionRecord.jobNumber}</EntityLink>
                     </div>
                     <div className="flex items-center justify-between">
                       <span>Work order</span>
-                      <EntityLink href="/quotes/q-1003/convert">{q1003ConversionRecord.workOrder}</EntityLink>
+                      <EntityLink href="/quotes/q-1003/convert">{conversionRecord.workOrder}</EntityLink>
                     </div>
                     <div className="flex items-center justify-between">
                       <span>Source quote</span>
-                      <EntityLink href="/quotes/q-1003">{q1003ConversionRecord.quoteId}</EntityLink>
+                      <EntityLink href="/quotes/q-1003">{conversionRecord.quoteId}</EntityLink>
                     </div>
                   </div>
                 </div>
@@ -286,20 +317,20 @@ export function QuoteDetailView() {
 
           <TimelineShell title="Notes and approval history" subtitle="What the estimator captured and what leadership needs to know.">
             <div className="space-y-3">
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer-facing notes</div>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {quote.customerFacingNotes ?? "Customer-facing notes will be shown here."}
-                </p>
-              </div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Internal notes</div>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {quote.internalNotes ?? "Internal notes will be shown here."}
-                </p>
-              </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Customer-facing notes</div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {quoteForm.customerFacingNotes ?? quote.customerFacingNotes ?? "Customer-facing notes will be shown here."}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Internal notes</div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {quoteForm.internalNotes ?? quote.internalNotes ?? "Internal notes will be shown here."}
+                      </p>
+                    </div>
               <div className="space-y-2">
-                {q1003ApprovalHistory.map((entry) => (
+                {approvalHistory.map((entry) => (
                   <div key={entry.timestamp + entry.title} className="rounded-md border border-slate-200 bg-white p-3">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-semibold text-slate-950">{entry.title}</div>
@@ -335,9 +366,13 @@ export function QuoteDetailView() {
   );
 }
 
-export function ApprovalsView() {
+type ApprovalsViewProps = {
+  baseQuotes?: Quote[];
+};
+
+export function ApprovalsView({ baseQuotes = quotes }: ApprovalsViewProps = {}) {
   const { state, approveQuoteQ1003 } = useDemoState();
-  const effectiveQuotes = useMemo(() => quotes.map((quote) => getEffectiveQuote(quote, state)), [state]);
+  const effectiveQuotes = useMemo(() => baseQuotes.map((quote) => getEffectiveQuote(quote, state)), [baseQuotes, state]);
   const quote = effectiveQuotes.find((entry) => entry.id === "Q-1003")!;
   const pendingApprovalQuotes = useMemo(
     () =>
@@ -757,22 +792,28 @@ export function QuoteConversionView() {
   );
 }
 
-export function AuditTrailView() {
+type AuditTrailViewProps = {
+  dataSourceMode: "demo" | "database";
+  auditEvents: AuditEvent[];
+  summary: AuditSummary;
+  auditRows: AuditTimelineRow[];
+  quickFilters: AuditQuickFilter[];
+};
+
+export function AuditTrailView({
+  dataSourceMode,
+  auditEvents: baseAuditEvents,
+  summary: baseSummary,
+  auditRows: baseAuditRows,
+  quickFilters
+}: AuditTrailViewProps) {
   const { state } = useDemoState();
-  const founderAuditEvents = getEffectiveAuditEvents(auditEvents, state).filter((event) => event.id !== 16);
-  const summary = getAuditSummary(founderAuditEvents);
-  const auditRows = getAuditTimelineRows(founderAuditEvents);
-  const quickFilters = [
-    "Q-1003",
-    "J-2035",
-    "J-2042",
-    "J-2099",
-    "J-2104",
-    "WO-2104",
-    "RW-2042-01",
-    "PR-3091",
-    "AL-6061-PLT-0.375"
-  ];
+  const founderAuditEvents =
+    dataSourceMode === "demo"
+      ? getEffectiveAuditEvents(baseAuditEvents, state).filter((event) => event.id !== 16)
+      : baseAuditEvents;
+  const summary = dataSourceMode === "demo" ? getAuditSummary(founderAuditEvents) : baseSummary;
+  const auditRows = dataSourceMode === "demo" ? getAuditTimelineRows(founderAuditEvents) : baseAuditRows;
 
   return (
     <div className="space-y-4">
@@ -823,22 +864,22 @@ export function AuditTrailView() {
               </label>
             ))}
           </div>
-          <div className="mt-4">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Entity quick filters
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {quickFilters.map((label) => (
+            <div className="mt-4">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                Entity quick filters
+              </div>
+              <div className="flex flex-wrap gap-2">
+              {quickFilters.map((filter) => (
                 <button
-                  key={label}
+                  key={filter.label}
                   type="button"
                   className="rounded-sm border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
                 >
-                  {label}
+                  {filter.label}
                 </button>
               ))}
+              </div>
             </div>
-          </div>
         </TimelineShell>
 
         <DataTableShell title="Founder audit timeline" subtitle="All 15 founder demo events, plus any runtime actions in chronological trace order.">
@@ -913,10 +954,13 @@ export function AuditTrailView() {
   );
 }
 
-export function EntityTimelineView() {
-  const { state } = useDemoState();
-  const entityTimeline = getJ2035EntityTimeline();
-  const auditRecords = getEffectiveAuditEvents(auditEvents, state).filter((event) =>
+type EntityTimelineViewProps = {
+  entityTimeline: EntityTimelineEntry[];
+  auditRecords: AuditEvent[];
+};
+
+export function EntityTimelineView({ entityTimeline, auditRecords }: EntityTimelineViewProps) {
+  const timelineAuditRecords = auditRecords.filter((event) =>
     [
       "job-moved-production",
       "traveler-printed",
@@ -987,7 +1031,7 @@ export function EntityTimelineView() {
       <AuditPanel
         title="Audit records"
         subtitle="Filtered records related to J-2035 and its customer report lineage."
-        items={auditRecords.map((event) => ({
+        items={timelineAuditRecords.map((event) => ({
           actor: event.actor,
           actorRole: event.actorRole,
           event: event.title,

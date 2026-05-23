@@ -5,7 +5,6 @@ import {
   JobRisk as PrismaJobRisk,
   JobStatus as PrismaJobStatus,
   Prisma,
-  PrismaClient,
   ProductionUpdateStatus as PrismaProductionUpdateStatus,
   PurchaseRequestPriority as PrismaPurchaseRequestPriority,
   PurchaseRequestStatus as PrismaPurchaseRequestStatus,
@@ -39,8 +38,7 @@ import {
   reports,
   workCenters
 } from "../lib/demo-data";
-
-const prisma = new PrismaClient();
+import { getPrismaClient } from "../lib/db/prisma";
 
 function slugify(value: string) {
   return value
@@ -765,7 +763,38 @@ async function seedQuality(tx: Prisma.TransactionClient) {
       }
     });
   }
+}
 
+async function seedReworkOrders(tx: Prisma.TransactionClient) {
+  for (const reworkOrder of reworkOrders) {
+    await tx.reworkOrder.upsert({
+      where: { id: reworkOrder.id },
+      update: {
+        linkedJobId: reworkOrder.linkedJobId,
+        reason: reworkOrder.reason,
+        workCenter: reworkOrder.workCenter,
+        estimatedHours: reworkOrder.estimatedHours,
+        priority: "HIGH",
+        status: "OPEN",
+        supervisor: reworkOrder.supervisor,
+        nextStep: reworkOrder.nextStep
+      },
+      create: {
+        id: reworkOrder.id,
+        linkedJobId: reworkOrder.linkedJobId,
+        reason: reworkOrder.reason,
+        workCenter: reworkOrder.workCenter,
+        estimatedHours: reworkOrder.estimatedHours,
+        priority: "HIGH",
+        status: "OPEN",
+        supervisor: reworkOrder.supervisor,
+        nextStep: reworkOrder.nextStep
+      }
+    });
+  }
+}
+
+async function seedQualityEvents(tx: Prisma.TransactionClient) {
   await tx.qualityEvent.upsert({
     where: { id: "J-2042-SCRAP-DETAIL" },
     update: {
@@ -837,33 +866,6 @@ async function seedQuality(tx: Prisma.TransactionClient) {
       reworkOrderId: "RW-2042-01"
     }
   });
-
-  for (const reworkOrder of reworkOrders) {
-    await tx.reworkOrder.upsert({
-      where: { id: reworkOrder.id },
-      update: {
-        linkedJobId: reworkOrder.linkedJobId,
-        reason: reworkOrder.reason,
-        workCenter: reworkOrder.workCenter,
-        estimatedHours: reworkOrder.estimatedHours,
-        priority: "HIGH",
-        status: "OPEN",
-        supervisor: reworkOrder.supervisor,
-        nextStep: reworkOrder.nextStep
-      },
-      create: {
-        id: reworkOrder.id,
-        linkedJobId: reworkOrder.linkedJobId,
-        reason: reworkOrder.reason,
-        workCenter: reworkOrder.workCenter,
-        estimatedHours: reworkOrder.estimatedHours,
-        priority: "HIGH",
-        status: "OPEN",
-        supervisor: reworkOrder.supervisor,
-        nextStep: reworkOrder.nextStep
-      }
-    });
-  }
 }
 
 async function seedPurchasing(tx: Prisma.TransactionClient) {
@@ -1079,25 +1081,39 @@ async function seedAudit(tx: Prisma.TransactionClient) {
 }
 
 async function main() {
-  await prisma.$transaction(async (tx) => {
-    await seedCustomers(tx);
-    await seedWorkCenters(tx);
-    await seedMaterials(tx);
-    await seedQuotes(tx);
-    await seedJobs(tx);
-    await seedQuality(tx);
-    await seedPurchasing(tx);
-    await seedReports(tx);
-    await seedAudit(tx);
-  });
+  const prisma = getPrismaClient();
+
+  // Neon/CI can exceed Prisma's default 5s interactive transaction timeout during
+  // deterministic seed upserts, so give the importer more room to complete.
+  await prisma.$transaction(
+    async (tx) => {
+      await seedCustomers(tx);
+      await seedWorkCenters(tx);
+      await seedMaterials(tx);
+      await seedQuotes(tx);
+      await seedJobs(tx);
+      await seedReworkOrders(tx);
+      await seedQuality(tx);
+      await seedQualityEvents(tx);
+      await seedPurchasing(tx);
+      await seedReports(tx);
+      await seedAudit(tx);
+    },
+    {
+      timeout: 60000,
+      maxWait: 15000
+    }
+  );
 }
 
 main()
   .then(async () => {
+    const prisma = getPrismaClient();
     await prisma.$disconnect();
   })
   .catch(async (error) => {
     console.error(error);
+    const prisma = getPrismaClient();
     await prisma.$disconnect();
     process.exit(1);
   });
