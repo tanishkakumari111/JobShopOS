@@ -150,3 +150,15 @@ It runs only in database mode, uses `WorkflowCommand` idempotency, writes transa
 `convertQuoteToJobCommand()` is now implemented as the second transactional server command.
 
 It converts an approved quote into a job and work order in database mode, generates routing and material task records when the schema supports them, and writes the conversion audit trail transactionally. Demo mode and the browser-local quote workflow remain unchanged until the UI is intentionally rewired later.
+
+## Quote Command Smoke Test
+
+After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:
+
+```bash
+JOBSHOP_DATA_SOURCE=database DATABASE_URL=... npm run db:migrate
+JOBSHOP_DATA_SOURCE=database DATABASE_URL=... npm run db:seed
+JOBSHOP_DATA_SOURCE=database DATABASE_URL=... npm run smoke:quote-commands
+```
+
+The smoke script checks that Q-1003 approves and converts in database mode, that J-2104 and WO-2104 exist, and that rerunning the commands with the same idempotency keys does not duplicate command effects.
