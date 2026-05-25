@@ -1,5 +1,5 @@
 import { getDataSourceMode } from "@/lib/data-source";
-import { getQuoteSmokeKeys } from "./smoke-run-id";
+import { getQuoteSmokeKeys, getSmokeActorHeaders } from "./smoke-run-id";
 
 type CommandResponse = {
   status?: string;
@@ -22,12 +22,13 @@ function getBaseUrl() {
   return (process.env.APP_BASE_URL?.trim() || "http://localhost:3000").replace(/\/+$/, "");
 }
 
-async function postCommand(path: string, idempotencyKey: string) {
+async function postCommand(path: string, idempotencyKey: string, actor: string, role: string) {
   const response = await fetch(`${getBaseUrl()}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Idempotency-Key": idempotencyKey
+      "Idempotency-Key": idempotencyKey,
+      ...getSmokeActorHeaders(actor, role)
     }
   });
 
@@ -49,16 +50,16 @@ async function main() {
 
   console.log(`Running quote command route smoke test against ${getBaseUrl()}...`);
 
-  const approveFirst = await postCommand("/api/commands/quotes/q-1003/approve", approvalKey);
+  const approveFirst = await postCommand("/api/commands/quotes/q-1003/approve", approvalKey, "Owner / GM", "Owner / GM");
   assertSucceeded("approveQuoteCommand route", approveFirst.response, approveFirst.payload);
 
-  const convertFirst = await postCommand("/api/commands/quotes/q-1003/convert", convertKey);
+  const convertFirst = await postCommand("/api/commands/quotes/q-1003/convert", convertKey, "Scheduler", "Scheduler");
   assertSucceeded("convertQuoteToJobCommand route", convertFirst.response, convertFirst.payload);
 
-  const approveReplay = await postCommand("/api/commands/quotes/q-1003/approve", approvalKey);
+  const approveReplay = await postCommand("/api/commands/quotes/q-1003/approve", approvalKey, "Owner / GM", "Owner / GM");
   assertSucceeded("approveQuoteCommand replay", approveReplay.response, approveReplay.payload);
 
-  const convertReplay = await postCommand("/api/commands/quotes/q-1003/convert", convertKey);
+  const convertReplay = await postCommand("/api/commands/quotes/q-1003/convert", convertKey, "Scheduler", "Scheduler");
   assertSucceeded("convertQuoteToJobCommand replay", convertReplay.response, convertReplay.payload);
 
   assert(

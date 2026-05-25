@@ -304,6 +304,22 @@ In database mode, the customer report preview and print views render directly fr
 
 Database mode still requires a seeded PostgreSQL database plus the configured Neon environment variables. Demo mode does not need database access and remains the founder demo path.
 
+## Phase 17A Status
+
+Temporary command actor context is now centralized in `lib/commands/actor-context.ts` so route handlers no longer each hardcode their own actor/role pairing. The product still uses temporary route actors until a full auth provider is added, but the command routes now resolve those values through a single helper before building the command context.
+
+## Phase 17B Status
+
+Database-mode command routes can now optionally accept temporary actor overrides from request headers when explicitly enabled:
+
+- set `JOBSHOP_COMMAND_ACTOR_HEADER_ENABLED=true`
+- send `X-JobShop-Actor` and `X-JobShop-Role`
+- allowed roles are normalized centrally through `lib/commands/actor-context.ts`
+
+This override is temporary and test-only. When the flag is not enabled, the routes ignore those headers and continue using the temporary route actor fallback from Phase 17A. Full auth provider integration is still pending.
+
+The Linux DB migration smoke workflow now enables the flag so route smoke tests can verify actor/role behavior without hardcoding actor values independently inside each route.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:

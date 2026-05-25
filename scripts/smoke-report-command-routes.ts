@@ -1,5 +1,5 @@
 import { getDataSourceMode } from "@/lib/data-source";
-import { getReportSmokeKeys } from "./smoke-run-id";
+import { getReportSmokeKeys, getSmokeActorHeaders } from "./smoke-run-id";
 
 type CommandResponse = {
   status?: string;
@@ -28,12 +28,13 @@ function getBaseUrl() {
   return (process.env.APP_BASE_URL?.trim() || "http://localhost:3000").replace(/\/+$/, "");
 }
 
-async function postCommand(path: string, idempotencyKey: string) {
+async function postCommand(path: string, idempotencyKey: string, actor: string, role: string) {
   const response = await fetch(`${getBaseUrl()}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Idempotency-Key": idempotencyKey
+      "Idempotency-Key": idempotencyKey,
+      ...getSmokeActorHeaders(actor, role)
     }
   });
 
@@ -55,11 +56,11 @@ async function main() {
 
   console.log(`Running report command route smoke test against ${getBaseUrl()}...`);
 
-  const first = await postCommand("/api/commands/reports/customer-status/j-2035/generate", idempotencyKey);
+  const first = await postCommand("/api/commands/reports/customer-status/j-2035/generate", idempotencyKey, "Customer Service", "Customer Service");
   assertSucceeded("generateCustomerStatusReportCommand route", first.response, first.payload);
   assert(first.payload.data?.reportId === "REPORT-J-2035-STATUS", "Expected the report route to return REPORT-J-2035-STATUS.");
 
-  const replay = await postCommand("/api/commands/reports/customer-status/j-2035/generate", idempotencyKey);
+  const replay = await postCommand("/api/commands/reports/customer-status/j-2035/generate", idempotencyKey, "Customer Service", "Customer Service");
   assertSucceeded("generateCustomerStatusReportCommand replay", replay.response, replay.payload);
 
   assert(
