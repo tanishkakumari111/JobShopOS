@@ -185,6 +185,15 @@ The quote workflow UI now chooses the command path by data source mode:
 
 Database mode requires a seeded PostgreSQL database plus the configured Neon environment variables. Demo mode does not need database access and remains the founder demo path.
 
+## Phase 13C Status
+
+A route-level smoke test now verifies the quote command HTTP endpoints in database mode:
+
+- `scripts/smoke-quote-command-routes.ts`
+- `npm run smoke:quote-command-routes`
+
+The smoke test requires `JOBSHOP_DATA_SOURCE=database`, `DATABASE_URL`, and an app base URL. It defaults to `http://localhost:3000` and posts to the quote command routes directly, then reruns the same requests to verify replay/idempotency behavior.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:
