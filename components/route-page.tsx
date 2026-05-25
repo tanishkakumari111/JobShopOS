@@ -1137,11 +1137,12 @@ async function routeBlocks(routeKey: RouteKey) {
     case "materials":
       {
         const model = await getMaterialsDashboardReadModel();
-        return (
-          <MaterialDashboardView
-            baseJobs={model.baseJobs}
-            baseMaterials={model.baseMaterials}
-            basePurchaseRequests={model.basePurchaseRequests}
+      return (
+        <MaterialDashboardView
+          dataSourceMode={getDataSourceMode()}
+          baseJobs={model.baseJobs}
+          baseMaterials={model.baseMaterials}
+          basePurchaseRequests={model.basePurchaseRequests}
             baseAuditEvents={model.baseAuditEvents}
             baseMaterialRows={model.baseMaterialRows}
             baseBlockedJobs={model.baseBlockedJobs}
@@ -1156,11 +1157,12 @@ async function routeBlocks(routeKey: RouteKey) {
     case "material-al6061":
       {
         const model = await getMaterialDetailReadModel("AL-6061-PLT-0.375");
-        return (
-          <MaterialDetailView
-            baseJobs={model.baseJobs}
-            baseMaterials={model.baseMaterials}
-            basePurchaseRequests={model.basePurchaseRequests}
+      return (
+        <MaterialDetailView
+          dataSourceMode={getDataSourceMode()}
+          baseJobs={model.baseJobs}
+          baseMaterials={model.baseMaterials}
+          basePurchaseRequests={model.basePurchaseRequests}
             baseAuditEvents={model.baseAuditEvents}
             baseMaterialRows={model.baseMaterialRows}
             baseBlockedJobs={model.baseBlockedJobs}
@@ -1175,11 +1177,12 @@ async function routeBlocks(routeKey: RouteKey) {
     case "job-2099-material":
       {
         const model = await getMaterialImpactReadModel("J-2099");
-        return (
-          <MaterialImpactView
-            baseJobs={model.baseJobs}
-            baseMaterials={model.baseMaterials}
-            basePurchaseRequests={model.basePurchaseRequests}
+      return (
+        <MaterialImpactView
+          dataSourceMode={getDataSourceMode()}
+          baseJobs={model.baseJobs}
+          baseMaterials={model.baseMaterials}
+          basePurchaseRequests={model.basePurchaseRequests}
             baseAuditEvents={model.baseAuditEvents}
             baseMaterialRows={model.baseMaterialRows}
             baseBlockedJobs={model.baseBlockedJobs}
@@ -1194,11 +1197,12 @@ async function routeBlocks(routeKey: RouteKey) {
     case "purchase-request":
       {
         const model = await getPurchaseRequestReadModel("PR-3091");
-        return (
-          <PurchaseRequestView
-            baseJobs={model.baseJobs}
-            baseMaterials={model.baseMaterials}
-            basePurchaseRequests={model.basePurchaseRequests}
+      return (
+        <PurchaseRequestView
+          dataSourceMode={getDataSourceMode()}
+          baseJobs={model.baseJobs}
+          baseMaterials={model.baseMaterials}
+          basePurchaseRequests={model.basePurchaseRequests}
             baseAuditEvents={model.baseAuditEvents}
             baseMaterialRows={model.baseMaterialRows}
             baseBlockedJobs={model.baseBlockedJobs}

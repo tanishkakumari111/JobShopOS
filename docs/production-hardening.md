@@ -232,6 +232,42 @@ In database mode, the quality rework screen renders from the repository-backed r
 
 Database mode still requires a seeded PostgreSQL database plus the configured Neon environment variables. Demo mode does not need database access and remains the founder demo path.
 
+## Phase 15A Status
+
+The first materials command now exists for database mode:
+
+- `createPurchaseRequestCommand()`
+
+It creates or reuses the seeded purchase request path for `J-2099` and `AL-6061-PLT-0.375`, links the request back to the blocked job, updates the job material status to `Purchase Requested`, and writes the purchasing audit trail transactionally. Demo mode remains unchanged and still uses the browser-local `lib/demo-state` workflow.
+
+## Phase 15B Status
+
+A database-mode HTTP endpoint now exists for the J-2099 purchase request flow:
+
+- `POST /api/commands/materials/j-2099/create-purchase-request`
+
+It calls `createPurchaseRequestCommand()` with the seeded J-2099 and PR-3091 identifiers, uses `Buyer` / `Priya Mehta` as the temporary actor context, and returns a typed JSON command result. In demo mode it returns a clear 409 response so the localStorage workflow remains the only demo path.
+
+## Phase 15C Status
+
+Materials workflow smoke coverage now exists for both the command layer and the HTTP route:
+
+- `scripts/smoke-materials-commands.ts`
+- `scripts/smoke-materials-command-routes.ts`
+
+These verify that database mode can create or reuse `PR-3091` for the `J-2099` / `AL-6061-PLT-0.375` shortage and replay the command safely without duplicating effects. The Linux smoke workflow now runs the materials route smoke and materials command smoke alongside the quote and quality checks.
+
+## Phase 15D Status
+
+The materials workflow UI now chooses the purchase request path by data source mode:
+
+- `JOBSHOP_DATA_SOURCE=demo` keeps using the browser-local `lib/demo-state` action and localStorage overlay exactly as before.
+- `JOBSHOP_DATA_SOURCE=database` uses `POST /api/commands/materials/j-2099/create-purchase-request`, sends an idempotency key, and refreshes the repository-backed read models after a successful creation.
+
+In database mode, the purchase request screen renders from the repository-backed read model directly so it does not overlay stale browser-local purchasing state on top of the refreshed server data.
+
+Database mode still requires a seeded PostgreSQL database plus the configured Neon environment variables. Demo mode does not need database access and remains the founder demo path.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:

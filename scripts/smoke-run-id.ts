@@ -14,3 +14,10 @@ export function getQualitySmokeKeys(runId = getSmokeRunId()) {
     approval: `smoke-${runId}-quality-J-2042-approve-scrap-v1`
   };
 }
+
+export function getMaterialsSmokeKeys(runId = getSmokeRunId()) {
+  return {
+    command: `smoke-${runId}-materials-J-2099-create-purchase-request-v1`,
+    route: `smoke-${runId}-route-materials-J-2099-create-purchase-request-v1`
+  };
+}
