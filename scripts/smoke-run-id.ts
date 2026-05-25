@@ -17,6 +17,7 @@ export function getQualitySmokeKeys(runId = getSmokeRunId()) {
 
 export function getMaterialsSmokeKeys(runId = getSmokeRunId()) {
   return {
-    approval: `smoke-${runId}-materials-J-2099-create-purchase-request-v1`
+    command: `smoke-${runId}-materials-J-2099-create-purchase-request-v1`,
+    route: `smoke-${runId}-route-materials-J-2099-create-purchase-request-v1`
   };
 }

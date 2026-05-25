@@ -32,8 +32,8 @@ async function main() {
 
   console.log("Running materials command smoke test in database mode...");
 
-  const { approval: approvalKey } = getMaterialsSmokeKeys();
-  const context = makeContext(approvalKey);
+  const { command: commandKey } = getMaterialsSmokeKeys();
+  const context = makeContext(commandKey);
 
   const firstResult = await createPurchaseRequestCommand(
     {
@@ -63,7 +63,7 @@ async function main() {
     prisma.workflowCommand.findMany({
       where: {
         idempotencyKey: {
-          in: [approvalKey]
+          in: [commandKey]
         }
       },
       orderBy: { createdAt: "asc" }
@@ -103,7 +103,7 @@ async function main() {
     prisma.workflowCommand.findMany({
       where: {
         idempotencyKey: {
-          in: [approvalKey]
+          in: [commandKey]
         }
       },
       orderBy: { createdAt: "asc" }

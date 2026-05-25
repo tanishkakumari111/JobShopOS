@@ -45,7 +45,7 @@ async function main() {
   assert(mode === "database", "JOBSHOP_DATA_SOURCE=database is required for the materials command route smoke test.");
   assert(Boolean(process.env.DATABASE_URL?.trim()), "DATABASE_URL is required for the materials command route smoke test.");
 
-  const { approval: idempotencyKey } = getMaterialsSmokeKeys();
+  const { route: idempotencyKey } = getMaterialsSmokeKeys();
 
   console.log(`Running materials command route smoke test against ${getBaseUrl()}...`);
 
