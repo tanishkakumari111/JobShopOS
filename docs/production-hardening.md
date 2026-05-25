@@ -194,6 +194,14 @@ A route-level smoke test now verifies the quote command HTTP endpoints in databa
 
 The smoke test requires `JOBSHOP_DATA_SOURCE=database`, `DATABASE_URL`, and an app base URL. It defaults to `http://localhost:3000` and posts to the quote command routes directly, then reruns the same requests to verify replay/idempotency behavior.
 
+## Phase 14A Status
+
+The first quality command now exists for database mode:
+
+- `approveScrapAndCreateReworkCommand()`
+
+It approves the J-2042 scrap exception, moves the job to Rework, links or creates `RW-2042-01`, and writes the quality/rework audit trail transactionally. Demo mode remains unchanged and still uses the browser-local `lib/demo-state` workflow.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:
