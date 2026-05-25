@@ -28,3 +28,10 @@ export function getReportSmokeKeys(runId = getSmokeRunId()) {
     route: `smoke-${runId}-route-report-J-2035-generate-customer-status-v1`
   };
 }
+
+export function getSmokeActorHeaders(actor: string, role: string) {
+  return {
+    "X-JobShop-Actor": actor,
+    "X-JobShop-Role": role
+  };
+}

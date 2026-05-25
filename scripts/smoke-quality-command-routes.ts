@@ -1,5 +1,5 @@
 import { getDataSourceMode } from "@/lib/data-source";
-import { getQualitySmokeKeys } from "./smoke-run-id";
+import { getQualitySmokeKeys, getSmokeActorHeaders } from "./smoke-run-id";
 
 type CommandResponse = {
   status?: string;
@@ -22,12 +22,13 @@ function getBaseUrl() {
   return (process.env.APP_BASE_URL?.trim() || "http://localhost:3000").replace(/\/+$/, "");
 }
 
-async function postCommand(path: string, idempotencyKey: string) {
+async function postCommand(path: string, idempotencyKey: string, actor: string, role: string) {
   const response = await fetch(`${getBaseUrl()}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Idempotency-Key": idempotencyKey
+      "Idempotency-Key": idempotencyKey,
+      ...getSmokeActorHeaders(actor, role)
     }
   });
 
@@ -49,10 +50,10 @@ async function main() {
 
   console.log(`Running quality command route smoke test against ${getBaseUrl()}...`);
 
-  const first = await postCommand("/api/commands/quality/j-2042/approve-scrap", idempotencyKey);
+  const first = await postCommand("/api/commands/quality/j-2042/approve-scrap", idempotencyKey, "Shop Supervisor", "Shop Supervisor");
   assertSucceeded("approveScrapAndCreateReworkCommand route", first.response, first.payload);
 
-  const replay = await postCommand("/api/commands/quality/j-2042/approve-scrap", idempotencyKey);
+  const replay = await postCommand("/api/commands/quality/j-2042/approve-scrap", idempotencyKey, "Shop Supervisor", "Shop Supervisor");
   assertSucceeded("approveScrapAndCreateReworkCommand replay", replay.response, replay.payload);
 
   assert(

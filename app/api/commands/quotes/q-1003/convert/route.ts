@@ -1,23 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { convertQuoteToJobCommand } from "@/lib/commands/quote-commands";
+import { buildCommandContextFromActor, getCommandActorFromRequestHeaders } from "@/lib/commands/actor-context";
 import { commandResultToHttpStatus, createDemoModeCommandResponse, getRequestIdempotencyKey } from "@/lib/commands/http";
-import type { CommandContext } from "@/lib/commands/types";
 import { getDataSourceMode } from "@/lib/data-source";
 
 export const dynamic = "force-dynamic";
 
 const FALLBACK_IDEMPOTENCY_KEY = "quote-Q-1003-convert-ui";
-
-function buildCommandContext(idempotencyKey: string): CommandContext {
-  return {
-    actor: "Scheduler",
-    role: "Scheduler",
-    idempotencyKey,
-    now: new Date(),
-    dataSourceMode: "database"
-  };
-}
+const ROUTE_KEY = "quote-conversion";
 
 export async function POST(request: Request) {
   const dataSourceMode = getDataSourceMode();
@@ -27,9 +18,15 @@ export async function POST(request: Request) {
   }
 
   const idempotencyKey = getRequestIdempotencyKey(request, FALLBACK_IDEMPOTENCY_KEY);
+  const actorResolution = getCommandActorFromRequestHeaders(request.headers, ROUTE_KEY);
+
+  if (!actorResolution.ok) {
+    return NextResponse.json({ message: actorResolution.message }, { status: actorResolution.status });
+  }
+
   const result = await convertQuoteToJobCommand(
     { quoteId: "Q-1003", jobId: "J-2104", workOrderId: "WO-2104" },
-    buildCommandContext(idempotencyKey)
+    buildCommandContextFromActor({ ...actorResolution.actor, idempotencyKey })
   );
 
   return NextResponse.json(result, { status: commandResultToHttpStatus(result) });
