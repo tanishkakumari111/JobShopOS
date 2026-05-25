@@ -14,6 +14,7 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "db:diagnostic": "tsx scripts/db-diagnostic.ts",
+    "db:inspect-migrations": "tsx scripts/inspect-migrations.ts",
     "smoke:quote-commands": "tsx scripts/smoke-quote-commands.ts"
   },
   "prisma": {
