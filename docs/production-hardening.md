@@ -160,6 +160,22 @@ It runs only in database mode, uses `WorkflowCommand` idempotency, writes transa
 
 It converts an approved quote into a job and work order in database mode, generates routing and material task records when the schema supports them, and writes the conversion audit trail transactionally. Demo mode and the browser-local quote workflow remain unchanged until the UI is intentionally rewired later.
 
+## Phase 13A Status
+
+Temporary database-mode HTTP endpoints now exist for quote command execution:
+
+- `POST /api/commands/quotes/q-1003/approve`
+- `POST /api/commands/quotes/q-1003/convert`
+
+These endpoints call the existing server command layer in `JOBSHOP_DATA_SOURCE=database` and return typed JSON command results with transactional audit logging and idempotency. When `JOBSHOP_DATA_SOURCE=demo`, they return a clear 409 response so the browser-local `lib/demo-state` workflow remains the only demo path.
+
+Until auth is added, the endpoints use temporary actor context values:
+
+- approval: `Owner / GM`
+- conversion: `Scheduler`
+
+Idempotency is taken from the `Idempotency-Key` header when present and falls back to deterministic keys for the known Q-1003 demo commands.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:
