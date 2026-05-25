@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       JOBSHOP_DATA_SOURCE: database
+      SMOKE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
       # Use the Neon pooled URL for Prisma Client/runtime queries.
       DATABASE_URL: ${{ secrets.JOBSHOP_DATABASE_URL }}
       # Use the Neon direct URL for Prisma CLI migration/introspection steps.

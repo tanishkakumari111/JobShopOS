@@ -2,6 +2,7 @@ import { getDataSourceMode } from "@/lib/data-source";
 import { getPrismaClient } from "@/lib/db/prisma";
 import { approveScrapAndCreateReworkCommand } from "@/lib/commands/quality-commands";
 import type { CommandContext } from "@/lib/commands/types";
+import { getQualitySmokeKeys } from "./smoke-run-id";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -31,7 +32,8 @@ async function main() {
 
   console.log("Running quality command smoke test in database mode...");
 
-  const context = makeContext("smoke-quality-J-2042-approve-scrap-v1");
+  const { approval: approvalKey } = getQualitySmokeKeys();
+  const context = makeContext(approvalKey);
 
   const firstResult = await approveScrapAndCreateReworkCommand(
     {
@@ -59,7 +61,7 @@ async function main() {
     prisma.workflowCommand.findMany({
       where: {
         idempotencyKey: {
-          in: ["smoke-quality-J-2042-approve-scrap-v1"]
+          in: [approvalKey]
         }
       },
       orderBy: { createdAt: "asc" }
@@ -95,7 +97,7 @@ async function main() {
     prisma.workflowCommand.findMany({
       where: {
         idempotencyKey: {
-          in: ["smoke-quality-J-2042-approve-scrap-v1"]
+          in: [approvalKey]
         }
       },
       orderBy: { createdAt: "asc" }

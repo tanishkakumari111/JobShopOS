@@ -1,4 +1,5 @@
 import { getDataSourceMode } from "@/lib/data-source";
+import { getQualitySmokeKeys } from "./smoke-run-id";
 
 type CommandResponse = {
   status?: string;
@@ -44,7 +45,7 @@ async function main() {
   assert(mode === "database", "JOBSHOP_DATA_SOURCE=database is required for the quality command route smoke test.");
   assert(Boolean(process.env.DATABASE_URL?.trim()), "DATABASE_URL is required for the quality command route smoke test.");
 
-  const idempotencyKey = "smoke-route-quality-J-2042-approve-scrap-v1";
+  const { approval: idempotencyKey } = getQualitySmokeKeys();
 
   console.log(`Running quality command route smoke test against ${getBaseUrl()}...`);
 
