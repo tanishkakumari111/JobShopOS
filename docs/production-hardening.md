@@ -232,6 +232,14 @@ In database mode, the quality rework screen renders from the repository-backed r
 
 Database mode still requires a seeded PostgreSQL database plus the configured Neon environment variables. Demo mode does not need database access and remains the founder demo path.
 
+## Phase 15A Status
+
+The first materials command now exists for database mode:
+
+- `createPurchaseRequestCommand()`
+
+It creates or reuses the seeded purchase request path for `J-2099` and `AL-6061-PLT-0.375`, links the request back to the blocked job, updates the job material status to `Purchase Requested`, and writes the purchasing audit trail transactionally. Demo mode remains unchanged and still uses the browser-local `lib/demo-state` workflow.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:
