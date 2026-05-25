@@ -15,6 +15,7 @@
     "db:studio": "prisma studio",
     "db:diagnostic": "tsx scripts/db-diagnostic.ts",
     "db:inspect-migrations": "tsx scripts/inspect-migrations.ts",
+    "smoke:command-auth-fail-closed": "tsx scripts/smoke-command-auth-fail-closed.ts",
     "smoke:quote-commands": "tsx scripts/smoke-quote-commands.ts",
     "smoke:quote-command-routes": "tsx scripts/smoke-quote-command-routes.ts",
     "smoke:quality-commands": "tsx scripts/smoke-quality-commands.ts",
