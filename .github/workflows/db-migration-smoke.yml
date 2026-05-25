@@ -56,5 +56,11 @@ jobs:
       - name: Smoke test quote command routes
         run: npm run smoke:quote-command-routes
 
+      - name: Smoke test quality command routes
+        run: npm run smoke:quality-command-routes
+
       - name: Smoke test quote commands
         run: npm run smoke:quote-commands
+
+      - name: Smoke test quality commands
+        run: npm run smoke:quality-commands

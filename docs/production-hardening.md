@@ -210,6 +210,15 @@ A database-mode HTTP endpoint now exists for the J-2042 scrap approval flow:
 
 It calls `approveScrapAndCreateReworkCommand()` with the seeded J-2042 and RW-2042-01 identifiers, uses `Shop Supervisor` as the temporary actor context, and returns a typed JSON command result. In demo mode it returns a clear 409 response so the localStorage workflow remains the only demo path.
 
+## Phase 14C Status
+
+Quality workflow smoke coverage now exists for both the command layer and the HTTP route:
+
+- `scripts/smoke-quality-commands.ts`
+- `scripts/smoke-quality-command-routes.ts`
+
+These verify that database mode can approve J-2042 scrap, create or reuse RW-2042-01, and replay the command safely without duplicating effects. The Linux smoke workflow now runs the quality route smoke and quality command smoke alongside the quote checks.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:
