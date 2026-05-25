@@ -16,7 +16,9 @@
     "db:diagnostic": "tsx scripts/db-diagnostic.ts",
     "db:inspect-migrations": "tsx scripts/inspect-migrations.ts",
     "smoke:quote-commands": "tsx scripts/smoke-quote-commands.ts",
-    "smoke:quote-command-routes": "tsx scripts/smoke-quote-command-routes.ts"
+    "smoke:quote-command-routes": "tsx scripts/smoke-quote-command-routes.ts",
+    "smoke:quality-commands": "tsx scripts/smoke-quality-commands.ts",
+    "smoke:quality-command-routes": "tsx scripts/smoke-quality-command-routes.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

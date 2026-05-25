@@ -194,6 +194,44 @@ A route-level smoke test now verifies the quote command HTTP endpoints in databa
 
 The smoke test requires `JOBSHOP_DATA_SOURCE=database`, `DATABASE_URL`, and an app base URL. It defaults to `http://localhost:3000` and posts to the quote command routes directly, then reruns the same requests to verify replay/idempotency behavior.
 
+## Phase 14A Status
+
+The first quality command now exists for database mode:
+
+- `approveScrapAndCreateReworkCommand()`
+
+It approves the J-2042 scrap exception, moves the job to Rework, links or creates `RW-2042-01`, and writes the quality/rework audit trail transactionally. Demo mode remains unchanged and still uses the browser-local `lib/demo-state` workflow.
+
+## Phase 14B Status
+
+A database-mode HTTP endpoint now exists for the J-2042 scrap approval flow:
+
+- `POST /api/commands/quality/j-2042/approve-scrap`
+
+It calls `approveScrapAndCreateReworkCommand()` with the seeded J-2042 and RW-2042-01 identifiers, uses `Shop Supervisor` as the temporary actor context, and returns a typed JSON command result. In demo mode it returns a clear 409 response so the localStorage workflow remains the only demo path.
+
+## Phase 14C Status
+
+Quality workflow smoke coverage now exists for both the command layer and the HTTP route:
+
+- `scripts/smoke-quality-commands.ts`
+- `scripts/smoke-quality-command-routes.ts`
+
+These verify that database mode can approve J-2042 scrap, create or reuse RW-2042-01, and replay the command safely without duplicating effects. The Linux smoke workflow now runs the quality route smoke and quality command smoke alongside the quote checks.
+
+The smoke scripts derive their idempotency keys from `SMOKE_RUN_ID` so a GitHub Actions rerun gets fresh keys while each script still reruns the same command twice internally to verify replay behavior.
+
+## Phase 14D Status
+
+The quality workflow UI now chooses the approval path by data source mode:
+
+- `JOBSHOP_DATA_SOURCE=demo` keeps using the browser-local `lib/demo-state` action and localStorage overlay exactly as before.
+- `JOBSHOP_DATA_SOURCE=database` uses `POST /api/commands/quality/j-2042/approve-scrap`, sends an idempotency key, and refreshes the repository-backed read models after a successful approval.
+
+In database mode, the quality rework screen renders from the repository-backed read model directly so it does not overlay stale browser-local quality state on top of the refreshed server data.
+
+Database mode still requires a seeded PostgreSQL database plus the configured Neon environment variables. Demo mode does not need database access and remains the founder demo path.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:

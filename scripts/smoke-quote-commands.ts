@@ -2,6 +2,7 @@ import { getDataSourceMode } from "@/lib/data-source";
 import { getPrismaClient } from "@/lib/db/prisma";
 import { approveQuoteCommand, convertQuoteToJobCommand } from "@/lib/commands/quote-commands";
 import type { CommandContext } from "@/lib/commands/types";
+import { getQuoteSmokeKeys } from "./smoke-run-id";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -31,8 +32,9 @@ async function main() {
 
   console.log("Running quote command smoke test in database mode...");
 
-  const approveContext = makeContext("smoke-quote-approval-v1");
-  const convertContext = makeContext("smoke-quote-conversion-v1");
+  const { approval: approveKey, conversion: convertKey } = getQuoteSmokeKeys();
+  const approveContext = makeContext(approveKey);
+  const convertContext = makeContext(convertKey);
 
   const approveResult = await approveQuoteCommand({ quoteId: "Q-1003" }, approveContext);
   console.log("approveQuoteCommand:", JSON.stringify(approveResult));
@@ -50,7 +52,7 @@ async function main() {
     prisma.workflowCommand.findMany({
       where: {
         idempotencyKey: {
-          in: ["smoke-quote-approval-v1", "smoke-quote-conversion-v1"]
+          in: [approveKey, convertKey]
         }
       },
       orderBy: { createdAt: "asc" }
@@ -79,7 +81,7 @@ async function main() {
     prisma.workflowCommand.findMany({
       where: {
         idempotencyKey: {
-          in: ["smoke-quote-approval-v1", "smoke-quote-conversion-v1"]
+          in: [approveKey, convertKey]
         }
       },
       orderBy: { createdAt: "asc" }

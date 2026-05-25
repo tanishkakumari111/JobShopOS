@@ -1,4 +1,5 @@
 import { getDataSourceMode } from "@/lib/data-source";
+import { getQuoteSmokeKeys } from "./smoke-run-id";
 
 type CommandResponse = {
   status?: string;
@@ -44,8 +45,7 @@ async function main() {
   assert(mode === "database", "JOBSHOP_DATA_SOURCE=database is required for the quote command route smoke test.");
   assert(Boolean(process.env.DATABASE_URL?.trim()), "DATABASE_URL is required for the quote command route smoke test.");
 
-  const approvalKey = "route-smoke-quote-q-1003-approve";
-  const convertKey = "route-smoke-quote-q-1003-convert";
+  const { approval: approvalKey, conversion: convertKey } = getQuoteSmokeKeys();
 
   console.log(`Running quote command route smoke test against ${getBaseUrl()}...`);
 
