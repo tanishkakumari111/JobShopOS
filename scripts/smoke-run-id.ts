@@ -21,3 +21,10 @@ export function getMaterialsSmokeKeys(runId = getSmokeRunId()) {
     route: `smoke-${runId}-route-materials-J-2099-create-purchase-request-v1`
   };
 }
+
+export function getReportSmokeKeys(runId = getSmokeRunId()) {
+  return {
+    command: `smoke-${runId}-report-J-2035-generate-customer-status-v1`,
+    route: `smoke-${runId}-route-report-J-2035-generate-customer-status-v1`
+  };
+}

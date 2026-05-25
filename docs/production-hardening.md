@@ -268,6 +268,42 @@ In database mode, the purchase request screen renders from the repository-backed
 
 Database mode still requires a seeded PostgreSQL database plus the configured Neon environment variables. Demo mode does not need database access and remains the founder demo path.
 
+## Phase 16A Status
+
+A database-mode command now exists for generating and saving the customer-safe status report for J-2035 / MetroFab Industries:
+
+- `generateCustomerStatusReportCommand()`
+
+It creates or reuses `REPORT-J-2035-STATUS`, links the report to the J-2035 job and MetroFab Industries customer record, marks the job as having a generated report, and writes the customer-safe audit trail transactionally. Demo mode remains unchanged and continues to use the browser-local customer report workflow.
+
+## Phase 16B Status
+
+A database-mode HTTP endpoint now exists for the J-2035 customer report workflow:
+
+- `POST /api/commands/reports/customer-status/j-2035/generate`
+
+It calls `generateCustomerStatusReportCommand()` with the seeded J-2035 and MetroFab Industries identifiers, uses `Customer Service` as the temporary actor context, and returns a typed JSON command result. In demo mode it returns a clear 409 response so the browser-local customer report workflow remains the only demo path.
+
+## Phase 16C Status
+
+Customer report smoke coverage now exists for both the command layer and the HTTP route:
+
+- `scripts/smoke-report-commands.ts`
+- `scripts/smoke-report-command-routes.ts`
+
+These verify that database mode can generate or reuse `REPORT-J-2035-STATUS` for J-2035 and MetroFab Industries, link the report back to the job and customer record, mark the job as generated, and replay the command safely without duplicating effects. The Linux smoke workflow now runs the report route smoke and report command smoke alongside the quote, quality, and materials checks.
+
+## Phase 16D Status
+
+The customer report workflow UI now chooses the generation path by data source mode:
+
+- `JOBSHOP_DATA_SOURCE=demo` keeps using the browser-local `generateCustomerReportJ2035()` action and localStorage overlay exactly as before.
+- `JOBSHOP_DATA_SOURCE=database` uses `POST /api/commands/reports/customer-status/j-2035/generate`, sends an idempotency key, and refreshes the repository-backed read models after a successful generation.
+
+In database mode, the customer report preview and print views render directly from the repository-backed read model so they do not overlay stale browser-local report state on top of the refreshed server data.
+
+Database mode still requires a seeded PostgreSQL database plus the configured Neon environment variables. Demo mode does not need database access and remains the founder demo path.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:

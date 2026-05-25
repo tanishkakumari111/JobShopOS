@@ -20,7 +20,9 @@
     "smoke:quality-commands": "tsx scripts/smoke-quality-commands.ts",
     "smoke:quality-command-routes": "tsx scripts/smoke-quality-command-routes.ts",
     "smoke:materials-commands": "tsx scripts/smoke-materials-commands.ts",
-    "smoke:materials-command-routes": "tsx scripts/smoke-materials-command-routes.ts"
+    "smoke:materials-command-routes": "tsx scripts/smoke-materials-command-routes.ts",
+    "smoke:report-commands": "tsx scripts/smoke-report-commands.ts",
+    "smoke:report-command-routes": "tsx scripts/smoke-report-command-routes.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
