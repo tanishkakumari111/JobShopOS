@@ -1099,6 +1099,7 @@ async function routeBlocks(routeKey: RouteKey) {
         const model = await getQualityDashboardReadModel();
         return (
           <QualityDashboardView
+            dataSourceMode={getDataSourceMode()}
             baseJobs={model.baseJobs}
             baseReworkOrders={model.baseReworkOrders}
             baseAuditEvents={model.baseAuditEvents}
@@ -1113,6 +1114,7 @@ async function routeBlocks(routeKey: RouteKey) {
         const model = await getScrapApprovalReadModel("J-2042");
         return (
           <ScrapApprovalView
+            dataSourceMode={getDataSourceMode()}
             baseJobs={model.baseJobs}
             baseReworkOrders={model.baseReworkOrders}
             baseAuditEvents={model.baseAuditEvents}
@@ -1125,6 +1127,7 @@ async function routeBlocks(routeKey: RouteKey) {
         const model = await getReworkCreatedReadModel("J-2042");
         return (
           <ReworkCreatedView
+            dataSourceMode={getDataSourceMode()}
             baseJobs={model.baseJobs}
             baseReworkOrders={model.baseReworkOrders}
             baseAuditEvents={model.baseAuditEvents}

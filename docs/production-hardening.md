@@ -221,6 +221,17 @@ These verify that database mode can approve J-2042 scrap, create or reuse RW-204
 
 The smoke scripts derive their idempotency keys from `SMOKE_RUN_ID` so a GitHub Actions rerun gets fresh keys while each script still reruns the same command twice internally to verify replay behavior.
 
+## Phase 14D Status
+
+The quality workflow UI now chooses the approval path by data source mode:
+
+- `JOBSHOP_DATA_SOURCE=demo` keeps using the browser-local `lib/demo-state` action and localStorage overlay exactly as before.
+- `JOBSHOP_DATA_SOURCE=database` uses `POST /api/commands/quality/j-2042/approve-scrap`, sends an idempotency key, and refreshes the repository-backed read models after a successful approval.
+
+In database mode, the quality rework screen renders from the repository-backed read model directly so it does not overlay stale browser-local quality state on top of the refreshed server data.
+
+Database mode still requires a seeded PostgreSQL database plus the configured Neon environment variables. Demo mode does not need database access and remains the founder demo path.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:

@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { AuditPanel } from "@/components/audit-panel";
 import { DataTableShell } from "@/components/data-table-shell";
 import { EntityLink } from "@/components/entity-link";
@@ -22,9 +24,11 @@ import type {
   ScrapEventDetail
 } from "@/lib/demo-data/types";
 import { getEffectiveAuditEvents, getEffectiveJob, getEffectiveReworkOrder } from "@/lib/demo-state";
+import type { DataSourceMode } from "@/lib/data-source";
 import { cn } from "@/lib/utils";
 
 type QualityBaseProps = {
+  dataSourceMode: DataSourceMode;
   baseJobs?: Job[];
   baseReworkOrders?: ReworkOrder[];
   baseAuditEvents?: AuditEvent[];
@@ -47,16 +51,23 @@ function getQualityAuditHref(entityId: string) {
 }
 
 export function QualityDashboardView({
+  dataSourceMode,
   baseJobs = jobs,
   baseReworkOrders = reworkOrders,
   baseAuditEvents = auditEvents,
   baseInspectionQueueRows = inspectionQueueRows,
   baseQualityTimeline = j2042QualityTimeline
-}: QualityBaseProps = {}) {
+}: QualityBaseProps) {
   const { state } = useDemoState();
-  const effectiveJobs = useMemo(() => baseJobs.map((job) => getEffectiveJob(job, state)), [baseJobs, state]);
-  const effectiveReworkOrders = useMemo(() => baseReworkOrders.map((order) => getEffectiveReworkOrder(order, state)), [baseReworkOrders, state]);
-  const effectiveAuditEvents = getEffectiveAuditEvents(baseAuditEvents, state);
+  const effectiveJobs = useMemo(
+    () => (dataSourceMode === "demo" ? baseJobs.map((job) => getEffectiveJob(job, state)) : baseJobs),
+    [baseJobs, dataSourceMode, state]
+  );
+  const effectiveReworkOrders = useMemo(
+    () => (dataSourceMode === "demo" ? baseReworkOrders.map((order) => getEffectiveReworkOrder(order, state)) : baseReworkOrders),
+    [baseReworkOrders, dataSourceMode, state]
+  );
+  const effectiveAuditEvents = dataSourceMode === "demo" ? getEffectiveAuditEvents(baseAuditEvents, state) : baseAuditEvents;
   const summary = getQualitySummary(effectiveJobs, effectiveReworkOrders, inspectionQueueRows);
   const j2042 = effectiveJobs.find((job) => job.id === "J-2042");
   const hasRuntimeApproval = j2042?.status === "Rework";
@@ -225,21 +236,84 @@ export function QualityDashboardView({
 }
 
 export function ScrapApprovalView({
+  dataSourceMode,
   baseJobs = jobs,
   baseReworkOrders = reworkOrders,
   baseAuditEvents = auditEvents,
   baseScrapEventDetail = j2042ScrapEventDetail
-}: QualityBaseProps = {}) {
+}: QualityBaseProps) {
   const { state, approveScrapJ2042 } = useDemoState();
-  const effectiveJobs = useMemo(() => baseJobs.map((job) => getEffectiveJob(job, state)), [baseJobs, state]);
-  const effectiveReworkOrders = useMemo(() => baseReworkOrders.map((order) => getEffectiveReworkOrder(order, state)), [baseReworkOrders, state]);
-  const effectiveAuditEvents = getEffectiveAuditEvents(baseAuditEvents, state);
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hasSucceeded, setHasSucceeded] = useState(false);
+  const effectiveJobs = useMemo(
+    () => (dataSourceMode === "demo" ? baseJobs.map((job) => getEffectiveJob(job, state)) : baseJobs),
+    [baseJobs, dataSourceMode, state]
+  );
+  const effectiveReworkOrders = useMemo(
+    () => (dataSourceMode === "demo" ? baseReworkOrders.map((order) => getEffectiveReworkOrder(order, state)) : baseReworkOrders),
+    [baseReworkOrders, dataSourceMode, state]
+  );
+  const effectiveAuditEvents = dataSourceMode === "demo" ? getEffectiveAuditEvents(baseAuditEvents, state) : baseAuditEvents;
   const job = effectiveJobs.find((entry) => entry.id === "J-2042");
   const rework = effectiveReworkOrders.find((entry) => entry.id === "RW-2042-01");
   const approved = job?.status === "Rework";
   const scrapRate = job?.scrapRate ?? 0.1;
   const toleranceRate = job?.allowedTolerance ?? 0.05;
   const auditRecords = effectiveAuditEvents.filter((event) => event.entityId === "J-2042" || event.entityId === "RW-2042-01");
+
+  useEffect(() => {
+    setStatusMessage(null);
+    setErrorMessage(null);
+    setHasSucceeded(false);
+    setIsSubmitting(false);
+  }, [dataSourceMode]);
+
+  async function handleApproveScrap() {
+    if (isSubmitting) {
+      return;
+    }
+
+    if (dataSourceMode === "demo") {
+      approveScrapJ2042();
+      setHasSucceeded(true);
+      setStatusMessage("J-2042 rework approved");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    try {
+      const response = await fetch("/api/commands/quality/j-2042/approve-scrap", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": "ui-quality-J-2042-approve-scrap"
+        }
+      });
+      const payload = (await response.json()) as { status?: string; message?: string; error?: { message?: string } };
+
+      if (!response.ok) {
+        throw new Error(payload.error?.message ?? payload.message ?? "Quality command failed.");
+      }
+
+      if (payload.status !== "succeeded") {
+        throw new Error("Quality command did not return a succeeded result.");
+      }
+
+      setHasSucceeded(true);
+      setStatusMessage("J-2042 rework approved");
+      router.refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Quality command failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -278,14 +352,26 @@ export function ScrapApprovalView({
           ) : (
             <button
               type="button"
-              onClick={approveScrapJ2042}
-              className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              onClick={handleApproveScrap}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500"
             >
-              Approve scrap and create rework
+              {isSubmitting ? "Approving..." : hasSucceeded ? "Rework approved" : "Approve scrap and create rework"}
             </button>
           )}
         </div>
       </div>
+
+      {statusMessage ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+          {statusMessage}
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-900">
+          {errorMessage}
+        </div>
+      ) : null}
 
       <RiskAlert
         severity={approved ? "Success" : "Critical"}
@@ -449,14 +535,21 @@ export function ScrapApprovalView({
 }
 
 export function ReworkCreatedView({
+  dataSourceMode,
   baseJobs = jobs,
   baseReworkOrders = reworkOrders,
   baseAuditEvents = auditEvents
-}: QualityBaseProps = {}) {
+}: QualityBaseProps) {
   const { state } = useDemoState();
-  const effectiveJobs = useMemo(() => baseJobs.map((job) => getEffectiveJob(job, state)), [baseJobs, state]);
-  const effectiveReworkOrders = useMemo(() => baseReworkOrders.map((order) => getEffectiveReworkOrder(order, state)), [baseReworkOrders, state]);
-  const effectiveAuditEvents = getEffectiveAuditEvents(baseAuditEvents, state);
+  const effectiveJobs = useMemo(
+    () => (dataSourceMode === "demo" ? baseJobs.map((job) => getEffectiveJob(job, state)) : baseJobs),
+    [baseJobs, dataSourceMode, state]
+  );
+  const effectiveReworkOrders = useMemo(
+    () => (dataSourceMode === "demo" ? baseReworkOrders.map((order) => getEffectiveReworkOrder(order, state)) : baseReworkOrders),
+    [baseReworkOrders, dataSourceMode, state]
+  );
+  const effectiveAuditEvents = dataSourceMode === "demo" ? getEffectiveAuditEvents(baseAuditEvents, state) : baseAuditEvents;
   const job = effectiveJobs.find((entry) => entry.id === "J-2042");
   const rework = effectiveReworkOrders.find((entry) => entry.id === "RW-2042-01");
   const approved = job?.status === "Rework";
