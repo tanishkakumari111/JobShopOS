@@ -39,6 +39,7 @@ import {
   ScrapApprovalView
 } from "@/components/quality-workflow-pages";
 import { routeMeta, type RouteKey } from "@/lib/routes";
+import { getDataSourceMode } from "@/lib/data-source";
 import { cn } from "@/lib/utils";
 import {
   auditEvents,
@@ -1513,6 +1514,7 @@ async function routeBlocks(routeKey: RouteKey) {
 
         return (
           <QuoteDetailView
+            dataSourceMode={getDataSourceMode()}
             quote={readModel.quote}
             auditEvents={readModel.auditEvents}
             approvalHistory={readModel.approvalHistory}
@@ -1524,13 +1526,24 @@ async function routeBlocks(routeKey: RouteKey) {
         );
       }
     case "quote-convert":
-      return <QuoteConversionView />;
+      {
+        const readModel = await getQuoteDetailReadModel("Q-1003");
+
+        return (
+          <QuoteConversionView
+            dataSourceMode={getDataSourceMode()}
+            quote={readModel.quote}
+            auditEvents={readModel.auditEvents}
+            conversionRecord={readModel.conversionRecord}
+          />
+        );
+      }
 
     case "approvals":
       {
         const readModel = await getApprovalsReadModel();
 
-        return <ApprovalsView baseQuotes={readModel.quotes} />;
+        return <ApprovalsView dataSourceMode={getDataSourceMode()} baseQuotes={readModel.quotes} />;
       }
 
     case "customer-service":

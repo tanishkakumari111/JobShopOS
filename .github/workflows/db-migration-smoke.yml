@@ -37,5 +37,24 @@ jobs:
       - name: Seed database
         run: npm run db:seed
 
+      - name: Build application
+        run: npm run build
+
+      - name: Start application
+        run: |
+          npm run start -- --hostname 127.0.0.1 > next-start.log 2>&1 &
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000 >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Next.js did not start in time"
+          cat next-start.log
+          exit 1
+
+      - name: Smoke test quote command routes
+        run: npm run smoke:quote-command-routes
+
       - name: Smoke test quote commands
         run: npm run smoke:quote-commands

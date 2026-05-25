@@ -160,6 +160,40 @@ It runs only in database mode, uses `WorkflowCommand` idempotency, writes transa
 
 It converts an approved quote into a job and work order in database mode, generates routing and material task records when the schema supports them, and writes the conversion audit trail transactionally. Demo mode and the browser-local quote workflow remain unchanged until the UI is intentionally rewired later.
 
+## Phase 13A Status
+
+Temporary database-mode HTTP endpoints now exist for quote command execution:
+
+- `POST /api/commands/quotes/q-1003/approve`
+- `POST /api/commands/quotes/q-1003/convert`
+
+These endpoints call the existing server command layer in `JOBSHOP_DATA_SOURCE=database` and return typed JSON command results with transactional audit logging and idempotency. When `JOBSHOP_DATA_SOURCE=demo`, they return a clear 409 response so the browser-local `lib/demo-state` workflow remains the only demo path.
+
+Until auth is added, the endpoints use temporary actor context values:
+
+- approval: `Owner / GM`
+- conversion: `Scheduler`
+
+Idempotency is taken from the `Idempotency-Key` header when present and falls back to deterministic keys for the known Q-1003 demo commands.
+
+## Phase 13B Status
+
+The quote workflow UI now chooses the command path by data source mode:
+
+- `JOBSHOP_DATA_SOURCE=demo` keeps using the browser-local `lib/demo-state` actions and localStorage overlay exactly as before.
+- `JOBSHOP_DATA_SOURCE=database` uses the new server command endpoints and refreshes the repository-backed read models after a successful approve or convert command.
+
+Database mode requires a seeded PostgreSQL database plus the configured Neon environment variables. Demo mode does not need database access and remains the founder demo path.
+
+## Phase 13C Status
+
+A route-level smoke test now verifies the quote command HTTP endpoints in database mode:
+
+- `scripts/smoke-quote-command-routes.ts`
+- `npm run smoke:quote-command-routes`
+
+The smoke test requires `JOBSHOP_DATA_SOURCE=database`, `DATABASE_URL`, and an app base URL. It defaults to `http://localhost:3000` and posts to the quote command routes directly, then reruns the same requests to verify replay/idempotency behavior.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:
