@@ -176,6 +176,15 @@ Until auth is added, the endpoints use temporary actor context values:
 
 Idempotency is taken from the `Idempotency-Key` header when present and falls back to deterministic keys for the known Q-1003 demo commands.
 
+## Phase 13B Status
+
+The quote workflow UI now chooses the command path by data source mode:
+
+- `JOBSHOP_DATA_SOURCE=demo` keeps using the browser-local `lib/demo-state` actions and localStorage overlay exactly as before.
+- `JOBSHOP_DATA_SOURCE=database` uses the new server command endpoints and refreshes the repository-backed read models after a successful approve or convert command.
+
+Database mode requires a seeded PostgreSQL database plus the configured Neon environment variables. Demo mode does not need database access and remains the founder demo path.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:

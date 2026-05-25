@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { AuditPanel } from "@/components/audit-panel";
 import { DataTableShell } from "@/components/data-table-shell";
 import { EntityLink } from "@/components/entity-link";
@@ -38,6 +40,7 @@ import {
 } from "@/lib/demo-data";
 import { requiresOwnerApproval } from "@/lib/demo-data";
 import { getEffectiveAuditEvents, getEffectiveQuote } from "@/lib/demo-state";
+import type { DataSourceMode } from "@/lib/data-source";
 import { cn } from "@/lib/utils";
 
 function getAuditHref(entityType: string, entityId: string) {
@@ -64,7 +67,106 @@ function getAuditHref(entityType: string, entityId: string) {
   return "/audit";
 }
 
+type QuoteCommandButtonProps = {
+  dataSourceMode: DataSourceMode;
+  label: string;
+  loadingLabel: string;
+  successLabel: string;
+  endpoint: string;
+  idempotencyKey: string;
+  demoAction: () => void;
+  disabled?: boolean;
+};
+
+function QuoteCommandButton({
+  dataSourceMode,
+  label,
+  loadingLabel,
+  successLabel,
+  endpoint,
+  idempotencyKey,
+  demoAction,
+  disabled = false
+}: QuoteCommandButtonProps) {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hasSucceeded, setHasSucceeded] = useState(false);
+
+  useEffect(() => {
+    setStatusMessage(null);
+    setErrorMessage(null);
+    setHasSucceeded(false);
+    setIsSubmitting(false);
+  }, [dataSourceMode, endpoint, idempotencyKey]);
+
+  async function handleClick() {
+    if (disabled || isSubmitting) {
+      return;
+    }
+
+    if (dataSourceMode === "demo") {
+      demoAction();
+      setHasSucceeded(true);
+      setStatusMessage(successLabel);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey
+        }
+      });
+      const payload = (await response.json()) as { message?: string; error?: { message?: string } };
+
+      if (!response.ok) {
+        throw new Error(payload.error?.message ?? payload.message ?? "Quote command failed.");
+      }
+
+      setHasSucceeded(true);
+      setStatusMessage(successLabel);
+      router.refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Quote command failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={disabled || isSubmitting}
+        className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500"
+      >
+        {isSubmitting ? loadingLabel : hasSucceeded ? successLabel : label}
+      </button>
+      {statusMessage ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm leading-6 text-emerald-900">
+          {statusMessage}
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-900">
+          {errorMessage}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type QuoteDetailViewProps = {
+  dataSourceMode: DataSourceMode;
   quote?: Quote;
   auditEvents?: AuditEvent[];
   approvalHistory?: QuoteApprovalHistoryEntry[];
@@ -75,6 +177,7 @@ type QuoteDetailViewProps = {
 };
 
 export function QuoteDetailView({
+  dataSourceMode,
   quote: baseQuote,
   auditEvents: baseAuditEvents,
   approvalHistory = q1003ApprovalHistory,
@@ -82,10 +185,13 @@ export function QuoteDetailView({
   materialEstimateRows = quoteMaterialEstimateRows,
   quoteForm = q1003QuoteForm,
   conversionRecord = q1003ConversionRecord
-}: QuoteDetailViewProps = {}) {
+}: QuoteDetailViewProps) {
   const { state } = useDemoState();
-  const quote = getEffectiveQuote(baseQuote ?? getQuoteById("Q-1003", quotes)!, state);
-  const effectiveAuditEvents = getEffectiveAuditEvents(baseAuditEvents ?? auditEvents, state);
+  const quote =
+    dataSourceMode === "demo"
+      ? getEffectiveQuote(baseQuote ?? getQuoteById("Q-1003", quotes)!, state)
+      : baseQuote ?? getQuoteById("Q-1003", quotes)!;
+  const effectiveAuditEvents = dataSourceMode === "demo" ? getEffectiveAuditEvents(baseAuditEvents ?? auditEvents, state) : baseAuditEvents ?? auditEvents;
   const quoteAuditEvents = effectiveAuditEvents.filter((event) =>
     ["Q-1003", "WO-2104", "J-2104"].includes(event.entityId)
   );
@@ -135,10 +241,10 @@ export function QuoteDetailView({
                 Convert to Job
               </Link>
             )}
-            <Link
-              href={!isApproved ? "/approvals" : isConverted ? "/customer-service/jobs/j-2035" : "/audit"}
-              className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-            >
+          <Link
+            href={!isApproved ? "/approvals" : isConverted ? "/customer-service/jobs/j-2035" : "/audit"}
+            className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+          >
               {isConverted ? "Generate customer-safe status report" : isApproved ? "View approval audit" : "Open Owner Approval Queue"}
             </Link>
           </div>
@@ -367,12 +473,17 @@ export function QuoteDetailView({
 }
 
 type ApprovalsViewProps = {
+  dataSourceMode: DataSourceMode;
   baseQuotes?: Quote[];
 };
 
-export function ApprovalsView({ baseQuotes = quotes }: ApprovalsViewProps = {}) {
+export function ApprovalsView({ dataSourceMode, baseQuotes = quotes }: ApprovalsViewProps) {
   const { state, approveQuoteQ1003 } = useDemoState();
-  const effectiveQuotes = useMemo(() => baseQuotes.map((quote) => getEffectiveQuote(quote, state)), [baseQuotes, state]);
+  const effectiveQuotes = useMemo(
+    () =>
+      dataSourceMode === "demo" ? baseQuotes.map((quote) => getEffectiveQuote(quote, state)) : baseQuotes,
+    [baseQuotes, dataSourceMode, state]
+  );
   const quote = effectiveQuotes.find((entry) => entry.id === "Q-1003")!;
   const pendingApprovalQuotes = useMemo(
     () =>
@@ -548,6 +659,16 @@ export function ApprovalsView({ baseQuotes = quotes }: ApprovalsViewProps = {}) 
                 >
                   Continue to conversion
                 </Link>
+              ) : dataSourceMode === "database" ? (
+                <QuoteCommandButton
+                  dataSourceMode={dataSourceMode}
+                  label="Approve Quote"
+                  loadingLabel="Approving..."
+                  successLabel="Q-1003 approved"
+                  endpoint="/api/commands/quotes/q-1003/approve"
+                  idempotencyKey="ui-quote-q-1003-approve"
+                  demoAction={approveQuoteQ1003}
+                />
               ) : (
                 <button
                   type="button"
@@ -570,23 +691,38 @@ export function ApprovalsView({ baseQuotes = quotes }: ApprovalsViewProps = {}) 
   );
 }
 
-export function QuoteConversionView() {
+type QuoteConversionViewProps = {
+  dataSourceMode: DataSourceMode;
+  quote?: Quote;
+  auditEvents?: AuditEvent[];
+  conversionRecord?: QuoteConversionRecord;
+};
+
+export function QuoteConversionView({
+  dataSourceMode,
+  quote: baseQuote,
+  auditEvents: baseAuditEvents,
+  conversionRecord = q1003ConversionRecord
+}: QuoteConversionViewProps) {
   const { state, convertQuoteQ1003 } = useDemoState();
-  const quote = getEffectiveQuote(getQuoteById("Q-1003", quotes)!, state);
-  const effectiveAuditEvents = getEffectiveAuditEvents(auditEvents, state);
+  const quote =
+    dataSourceMode === "demo"
+      ? getEffectiveQuote(baseQuote ?? getQuoteById("Q-1003", quotes)!, state)
+      : baseQuote ?? getQuoteById("Q-1003", quotes)!;
+  const effectiveAuditEvents = dataSourceMode === "demo" ? getEffectiveAuditEvents(baseAuditEvents ?? auditEvents, state) : baseAuditEvents ?? auditEvents;
   const quoteEvents = effectiveAuditEvents.filter((event) => ["Q-1003", "WO-2104", "J-2104"].includes(event.entityId));
   const isApproved = quote.status === "Approved" || quote.status === "Converted to Job";
   const isConverted = quote.status === "Converted to Job";
 
   const conversionCards = [
-    ["Quote", q1003ConversionRecord.quoteId],
-    ["Customer", q1003ConversionRecord.customerName],
-    ["Job number", q1003ConversionRecord.jobNumber],
-    ["Work order", q1003ConversionRecord.workOrder],
-    ["Routing template", q1003ConversionRecord.routingTemplate],
-    ["Initial material reservation", q1003ConversionRecord.initialMaterialReservation],
-    ["Scheduler", q1003ConversionRecord.scheduler],
-    ["Supervisor", q1003ConversionRecord.supervisor]
+    ["Quote", conversionRecord.quoteId],
+    ["Customer", conversionRecord.customerName],
+    ["Job number", conversionRecord.jobNumber],
+    ["Work order", conversionRecord.workOrder],
+    ["Routing template", conversionRecord.routingTemplate],
+    ["Initial material reservation", conversionRecord.initialMaterialReservation],
+    ["Scheduler", conversionRecord.scheduler],
+    ["Supervisor", conversionRecord.supervisor]
   ] as const;
 
   return (
@@ -621,9 +757,9 @@ export function QuoteConversionView() {
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard label="Quote status" value={quote.status === "Converted to Job" ? "Converted to Job" : quote.status === "Approved" ? "Approved" : "Needs Owner Approval"} detail="Approval audit event written" tone="emerald" />
-            <MetricCard label="Job number" value={q1003ConversionRecord.jobNumber} detail="Created from the approved quote" tone="blue" />
-            <MetricCard label="Work order" value={q1003ConversionRecord.workOrder} detail="Routing and traveler follow" tone="amber" />
-            <MetricCard label="Scheduler" value={q1003ConversionRecord.scheduler} detail={q1003ConversionRecord.supervisor} tone="slate" />
+            <MetricCard label="Job number" value={conversionRecord.jobNumber} detail="Created from the approved quote" tone="blue" />
+            <MetricCard label="Work order" value={conversionRecord.workOrder} detail="Routing and traveler follow" tone="amber" />
+            <MetricCard label="Scheduler" value={conversionRecord.scheduler} detail={conversionRecord.supervisor} tone="slate" />
           </div>
 
           <DataTableShell title="Convert Quote Q-1003 to Production Job" subtitle="The seeded conversion state carries the quote into a job and work order.">
@@ -638,9 +774,9 @@ export function QuoteConversionView() {
             <div className="border-t border-slate-200 px-4 py-4">
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Generated routing preview</div>
               <div className="mt-3 flex flex-wrap gap-2">
-                {q1003ConversionRecord.generatedRouting.map((step) => (
-                  <StatusBadge key={step} label={step} />
-                ))}
+                  {conversionRecord.generatedRouting.map((step) => (
+                    <StatusBadge key={step} label={step} />
+                  ))}
               </div>
               {!isApproved ? (
                 <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm leading-6 text-rose-900">
@@ -657,14 +793,14 @@ export function QuoteConversionView() {
           <DataTableShell title="Post-conversion state" subtitle="The approved quote becomes executable production work.">
             <div className="grid gap-3 p-4 md:grid-cols-2">
               {[
-                ["Job", q1003ConversionRecord.jobNumber],
-                ["Work order", q1003ConversionRecord.workOrder],
-                ["Source quote", q1003ConversionRecord.quoteId],
-                ["Customer", q1003ConversionRecord.customerName],
+                ["Job", conversionRecord.jobNumber],
+                ["Work order", conversionRecord.workOrder],
+                ["Source quote", conversionRecord.quoteId],
+                ["Customer", conversionRecord.customerName],
                 ["Routing", "Generated"],
                 ["Initial material reservation", "Pending"],
-                ["Assigned scheduler", q1003ConversionRecord.scheduler],
-                ["Assigned supervisor", q1003ConversionRecord.supervisor]
+                ["Assigned scheduler", conversionRecord.scheduler],
+                ["Assigned supervisor", conversionRecord.supervisor]
               ].map(([label, value]) => (
                 <div key={label} className="rounded-md border border-slate-200 bg-white p-3">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</div>
@@ -734,13 +870,25 @@ export function QuoteConversionView() {
                   <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
                     This stateful action persists in localStorage and appends audit events without changing the seeded fallback.
                   </div>
-                  <button
-                    type="button"
-                    onClick={convertQuoteQ1003}
-                    className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                  >
-                    Convert to Job
-                  </button>
+                  {dataSourceMode === "database" ? (
+                    <QuoteCommandButton
+                      dataSourceMode={dataSourceMode}
+                      label="Convert to Job"
+                      loadingLabel="Converting..."
+                      successLabel="Q-1003 converted"
+                      endpoint="/api/commands/quotes/q-1003/convert"
+                      idempotencyKey="ui-quote-q-1003-convert"
+                      demoAction={convertQuoteQ1003}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={convertQuoteQ1003}
+                      className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                    >
+                      Convert to Job
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -779,13 +927,13 @@ export function QuoteConversionView() {
           </TimelineShell>
 
           <TimelineShell title="Next step" subtitle="Continue the founder demo into the customer-safe reporting flow.">
-            <Link
-              href="/customer-service/jobs/j-2035"
-              className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-            >
-              Generate customer-safe status report
-            </Link>
-          </TimelineShell>
+              <Link
+                href="/customer-service/jobs/j-2035"
+                className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                Generate customer-safe status report
+              </Link>
+            </TimelineShell>
         </div>
       </div>
     </div>
