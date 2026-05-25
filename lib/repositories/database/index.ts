@@ -574,8 +574,11 @@ export function createDatabaseRepositories(): RepositorySet {
           }))
           .filter((row) => ["J-2035", "J-2042", "J-2099", "J-2070"].includes(row.jobId));
       },
-      getCustomerStatusReports: async (jobId: string) => {
-        const report = await prisma.customerReport.findFirst({ where: { jobId, audience: "CUSTOMER" } });
+        getCustomerStatusReports: async (jobId: string) => {
+          const report = await prisma.customerReport.findFirst({
+            where: { jobId, audience: "CUSTOMER" },
+            orderBy: { updatedAt: "desc" }
+          });
         if (!report) return undefined;
         return {
           report: {
@@ -1227,8 +1230,11 @@ export function createDatabaseRepositories(): RepositorySet {
         const rows = await prisma.customerReport.findMany();
         return rows.map(toReport);
       },
-      getCustomerStatusReport: async (jobId: string) => {
-        const row = await prisma.customerReport.findFirst({ where: { jobId, audience: "CUSTOMER" } });
+        getCustomerStatusReport: async (jobId: string) => {
+          const row = await prisma.customerReport.findFirst({
+            where: { jobId, audience: "CUSTOMER" },
+            orderBy: { updatedAt: "desc" }
+          });
         if (!row) return undefined;
         return {
           customer: row.customerName ?? "",
@@ -1249,8 +1255,11 @@ export function createDatabaseRepositories(): RepositorySet {
           reportSavedTo: row.reportSavedTo ?? row.savedAs ?? ""
         };
       },
-      getCustomerStatusTimeline: async (jobId: string) => {
-        const report = await prisma.customerReport.findFirst({ where: { jobId, audience: "CUSTOMER" } });
+        getCustomerStatusTimeline: async (jobId: string) => {
+          const report = await prisma.customerReport.findFirst({
+            where: { jobId, audience: "CUSTOMER" },
+            orderBy: { updatedAt: "desc" }
+          });
         if (!report) return [];
         return [
           { title: "Quote approved", detail: "Q-1003 approved and released to production.", timestamp: report.generatedAt, severity: "Success" },

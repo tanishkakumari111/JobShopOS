@@ -63,6 +63,9 @@ jobs:
       - name: Smoke test materials command routes
         run: npm run smoke:materials-command-routes
 
+      - name: Smoke test report command routes
+        run: npm run smoke:report-command-routes
+
       - name: Smoke test quote commands
         run: npm run smoke:quote-commands
 
@@ -71,3 +74,6 @@ jobs:
 
       - name: Smoke test materials commands
         run: npm run smoke:materials-commands
+
+      - name: Smoke test report commands
+        run: npm run smoke:report-commands
