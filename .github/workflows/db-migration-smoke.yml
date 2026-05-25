@@ -66,6 +66,11 @@ jobs:
           cat next-start.log
           exit 1
 
+      - name: Smoke test command routes fail closed without actor headers
+        env:
+          JOBSHOP_COMMAND_ACTOR_HEADER_ENABLED: "false"
+        run: npm run smoke:command-auth-fail-closed
+
       - name: Smoke test quote command routes
         run: npm run smoke:quote-command-routes
 

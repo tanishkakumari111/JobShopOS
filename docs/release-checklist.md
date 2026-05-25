@@ -27,6 +27,10 @@ Run the Linux DB smoke path before release:
 - command smoke scripts
 
 These checks verify the database-mode command routes, idempotency, audit logging, and repository-backed reads.
+DB Migration Smoke now also verifies both:
+
+- fail-closed unauthenticated command route behavior
+- gated internal/smoke actor override behavior with `JOBSHOP_COMMAND_ACTOR_HEADER_ENABLED=true`
 
 ## Security Checks
 
@@ -50,4 +54,3 @@ These checks verify the database-mode command routes, idempotency, audit logging
 
 - Next.js production builds may require an elevated rerun on Windows because of `spawn EPERM`
 - Linux CI remains the source of truth for database smoke validation
-

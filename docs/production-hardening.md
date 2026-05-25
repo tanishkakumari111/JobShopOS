@@ -341,6 +341,15 @@ Behavior:
 
 This phase changes the route boundary only. Command business logic remains unchanged.
 
+## Phase 19B Status
+
+The DB Migration Smoke workflow now proves both sides of the command-route auth boundary:
+
+- unauthenticated database-mode requests fail closed
+- the gated CI/internal actor override still works when `JOBSHOP_COMMAND_ACTOR_HEADER_ENABLED=true`
+
+This hardens the production readiness path without changing command business logic or adding a full auth provider yet.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:
