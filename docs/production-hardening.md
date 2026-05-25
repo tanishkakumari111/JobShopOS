@@ -390,3 +390,7 @@ This exists to isolate the native Windows Prisma schema-engine failure mode from
 - Use `npm run db:migrate:dev` during local development when you are iterating on schema changes.
 - Use `npm run db:migrate:deploy` in CI, staging, and production where commands must be non-interactive.
 - If Neon has a migration recorded that is missing locally, either use a fresh disposable branch/database or reconcile the migration history before running deploy. Do not use `migrate dev` in CI to try to recover from drift because it is interactive and can prompt for a destructive reset.
+
+## Release Checklist
+
+Before cutting a production release, follow [`docs/release-checklist.md`](./release-checklist.md) for the environment, smoke, security, demo/database, rollback, and Windows-specific release checks.
