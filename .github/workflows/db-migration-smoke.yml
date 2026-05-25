@@ -60,8 +60,14 @@ jobs:
       - name: Smoke test quality command routes
         run: npm run smoke:quality-command-routes
 
+      - name: Smoke test materials command routes
+        run: npm run smoke:materials-command-routes
+
       - name: Smoke test quote commands
         run: npm run smoke:quote-commands
 
       - name: Smoke test quality commands
         run: npm run smoke:quality-commands
+
+      - name: Smoke test materials commands
+        run: npm run smoke:materials-commands

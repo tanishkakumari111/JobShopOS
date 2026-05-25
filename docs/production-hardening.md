@@ -248,6 +248,15 @@ A database-mode HTTP endpoint now exists for the J-2099 purchase request flow:
 
 It calls `createPurchaseRequestCommand()` with the seeded J-2099 and PR-3091 identifiers, uses `Buyer` / `Priya Mehta` as the temporary actor context, and returns a typed JSON command result. In demo mode it returns a clear 409 response so the localStorage workflow remains the only demo path.
 
+## Phase 15C Status
+
+Materials workflow smoke coverage now exists for both the command layer and the HTTP route:
+
+- `scripts/smoke-materials-commands.ts`
+- `scripts/smoke-materials-command-routes.ts`
+
+These verify that database mode can create or reuse `PR-3091` for the `J-2099` / `AL-6061-PLT-0.375` shortage and replay the command safely without duplicating effects. The Linux smoke workflow now runs the materials route smoke and materials command smoke alongside the quote and quality checks.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:
