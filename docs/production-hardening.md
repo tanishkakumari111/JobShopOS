@@ -202,6 +202,14 @@ The first quality command now exists for database mode:
 
 It approves the J-2042 scrap exception, moves the job to Rework, links or creates `RW-2042-01`, and writes the quality/rework audit trail transactionally. Demo mode remains unchanged and still uses the browser-local `lib/demo-state` workflow.
 
+## Phase 14B Status
+
+A database-mode HTTP endpoint now exists for the J-2042 scrap approval flow:
+
+- `POST /api/commands/quality/j-2042/approve-scrap`
+
+It calls `approveScrapAndCreateReworkCommand()` with the seeded J-2042 and RW-2042-01 identifiers, uses `Shop Supervisor` as the temporary actor context, and returns a typed JSON command result. In demo mode it returns a clear 409 response so the localStorage workflow remains the only demo path.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:
