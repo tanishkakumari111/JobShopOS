@@ -320,6 +320,27 @@ This override is temporary and test-only. When the flag is not enabled, the rout
 
 The Linux DB migration smoke workflow now enables the flag so route smoke tests can verify actor/role behavior without hardcoding actor values independently inside each route.
 
+## Phase 18A Status
+
+A production-facing authenticated actor boundary now exists in `lib/commands/authenticated-actor.ts`.
+
+The boundary is intentionally fail-closed in database mode unless an authenticated actor can be resolved later by a real provider. The current implementation still leaves the temporary route actors and gated smoke-test header override intact for compatibility, but it does not yet wire route handlers over to a full auth provider.
+
+This phase is contract-only. The next phase can switch command routes to the authenticated boundary without changing command business logic.
+
+## Phase 18B Status
+
+Command routes now resolve their database-mode actor through `getAuthenticatedCommandActor(request, routeKey)`.
+
+Behavior:
+
+- demo mode still returns the existing 409 command-route response and continues using the browser-local workflow overlay
+- database mode now fails closed with 401/403 unless an authenticated actor is available
+- the gated `JOBSHOP_COMMAND_ACTOR_HEADER_ENABLED=true` smoke-test path still works for CI/internal verification
+- the temporary route actor fallback remains available for demo compatibility and transitional use, but database mode should not rely on it once a real auth provider is wired
+
+This phase changes the route boundary only. Command business logic remains unchanged.
+
 ## Quote Command Smoke Test
 
 After running migrations and seed against a real database, you can validate the quote approval and conversion commands with:

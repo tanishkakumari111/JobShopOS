@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { approveScrapAndCreateReworkCommand } from "@/lib/commands/quality-commands";
-import { buildCommandContextFromActor, getCommandActorFromRequestHeaders } from "@/lib/commands/actor-context";
+import { buildAuthenticatedCommandContext, commandActorErrorResponse, getAuthenticatedCommandActor } from "@/lib/commands/authenticated-actor";
 import { commandResultToHttpStatus, createDemoModeCommandResponse, getRequestIdempotencyKey } from "@/lib/commands/http";
 import { getDataSourceMode } from "@/lib/data-source";
 
@@ -18,10 +18,10 @@ export async function POST(request: Request) {
   }
 
   const idempotencyKey = getRequestIdempotencyKey(request, FALLBACK_IDEMPOTENCY_KEY);
-  const actorResolution = getCommandActorFromRequestHeaders(request.headers, ROUTE_KEY);
+  const actorResolution = getAuthenticatedCommandActor(request, ROUTE_KEY);
 
   if (!actorResolution.ok) {
-    return NextResponse.json({ message: actorResolution.message }, { status: actorResolution.status });
+    return commandActorErrorResponse(actorResolution);
   }
 
   const result = await approveScrapAndCreateReworkCommand(
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       jobId: "J-2042",
       reworkOrderId: "RW-2042-01"
     },
-    buildCommandContextFromActor({ ...actorResolution.actor, idempotencyKey })
+    buildAuthenticatedCommandContext(actorResolution.actor, idempotencyKey)
   );
 
   return NextResponse.json(result, { status: commandResultToHttpStatus(result) });
