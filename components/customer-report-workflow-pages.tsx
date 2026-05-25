@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
 import { AuditPanel } from "@/components/audit-panel";
 import { DataTableShell } from "@/components/data-table-shell";
 import { EntityLink } from "@/components/entity-link";
@@ -15,6 +16,7 @@ import { PrintButton } from "@/components/print-button";
 import { PrintFooter } from "@/components/print-footer";
 import { PrintHeader } from "@/components/print-header";
 import { useDemoState } from "@/components/demo-state-provider";
+import type { DataSourceMode } from "@/lib/data-source";
 import {
   auditEvents,
   customerSafeTimeline as seedCustomerSafeTimeline,
@@ -57,6 +59,7 @@ type CustomerWorkflowBaseProps = {
   baseCustomerSafeJobStatus?: CustomerSafeJobStatus;
   baseCustomerStatusReport?: CustomerStatusReport;
   baseCustomerSafeTimeline?: CustomerSafeTimelineItem[];
+  dataSourceMode?: DataSourceMode;
 };
 
 function useCustomerReportWorkflowState({
@@ -69,14 +72,23 @@ function useCustomerReportWorkflowState({
   baseCustomerRiskQueue,
   baseCustomerSafeJobStatus,
   baseCustomerStatusReport = seedCustomerStatusReport,
-  baseCustomerSafeTimeline = seedCustomerSafeTimeline
+  baseCustomerSafeTimeline = seedCustomerSafeTimeline,
+  dataSourceMode = "demo"
 }: CustomerWorkflowBaseProps = {}) {
+  const isDatabaseMode = dataSourceMode === "database";
   const { state, generateCustomerReportJ2035 } = useDemoState();
-  const effectiveJobs = useMemo(() => baseJobs.map((job) => getEffectiveJob(job, state)), [baseJobs, state]);
-  const effectiveCustomerReport = getEffectiveCustomerReport(baseCustomerStatusReport, state);
-  const effectiveAuditEvents = getEffectiveAuditEvents(baseAuditEvents, state);
-  const reportGenerated = Boolean(state.reports["J-2035-CUSTOMER-STATUS"]?.exists);
-  const generatedAt = state.reports["J-2035-CUSTOMER-STATUS"]?.generatedAt ?? effectiveCustomerReport.preparedTimestamp;
+  const effectiveJobs = useMemo(
+    () => (isDatabaseMode ? baseJobs : baseJobs.map((job) => getEffectiveJob(job, state))),
+    [baseJobs, isDatabaseMode, state]
+  );
+  const effectiveCustomerReport = isDatabaseMode ? baseCustomerStatusReport : getEffectiveCustomerReport(baseCustomerStatusReport, state);
+  const effectiveAuditEvents = isDatabaseMode ? baseAuditEvents : getEffectiveAuditEvents(baseAuditEvents, state);
+  const reportGenerated = isDatabaseMode
+    ? Boolean(baseJobs.find((job) => job.id === "J-2035")?.reportGenerated)
+    : Boolean(state.reports["J-2035-CUSTOMER-STATUS"]?.exists);
+  const generatedAt = isDatabaseMode
+    ? baseCustomerStatusReport.preparedTimestamp
+    : state.reports["J-2035-CUSTOMER-STATUS"]?.generatedAt ?? effectiveCustomerReport.preparedTimestamp;
   const customerServiceSummary =
     baseCustomerServiceSummary ?? getCustomerServiceSummary(effectiveJobs, baseReports);
   const customerRiskQueue = baseCustomerRiskQueue ?? getCustomerRiskQueue(effectiveJobs);
@@ -93,11 +105,104 @@ function useCustomerReportWorkflowState({
     customerServiceSummary,
     customerRiskQueue,
     customerSafeStatus,
+    dataSourceMode,
     baseCustomers,
     baseCustomerProfile,
     baseCustomerSafeTimeline,
     baseCustomerStatusReport
   };
+}
+
+type CustomerReportCommandButtonProps = {
+  dataSourceMode?: DataSourceMode;
+  demoGenerate: () => void;
+  generated: boolean;
+};
+
+function CustomerReportCommandButton({ dataSourceMode = "demo", demoGenerate, generated }: CustomerReportCommandButtonProps) {
+  const router = useRouter();
+  const [phase, setPhase] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isDatabaseMode = dataSourceMode === "database";
+
+  const handleGenerate = useCallback(async () => {
+    if (!isDatabaseMode) {
+      demoGenerate();
+      return;
+    }
+
+    setPhase("loading");
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch("/api/commands/reports/customer-status/j-2035/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": "ui-report-J-2035-generate-customer-status"
+        }
+      });
+      const payload = (await response.json()) as {
+        status?: string;
+        error?: { message?: string };
+        message?: string;
+      };
+
+      if (!response.ok || payload.status !== "succeeded") {
+        throw new Error(payload.error?.message ?? payload.message ?? `Request failed with HTTP ${response.status}`);
+      }
+
+      setPhase("success");
+      router.refresh();
+    } catch (error) {
+      setPhase("error");
+      setErrorMessage(error instanceof Error ? error.message : "Unable to generate the customer status report.");
+    }
+  }, [demoGenerate, isDatabaseMode, router]);
+
+  if (!isDatabaseMode) {
+    return (
+      <button
+        type="button"
+        onClick={demoGenerate}
+        className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+      >
+        Generate status report
+      </button>
+    );
+  }
+
+  const buttonLabel =
+    phase === "loading"
+      ? "Generating..."
+      : phase === "success"
+        ? "Generated"
+        : generated
+          ? "Generated"
+          : "Generate status report";
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={handleGenerate}
+        disabled={phase === "loading"}
+        className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        {buttonLabel}
+      </button>
+      {phase === "success" ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          Report generated and saved to MetroFab Industries customer record.
+        </div>
+      ) : null}
+      {phase === "error" && errorMessage ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+          {errorMessage}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function CustomerServiceCommandCenterView(props: CustomerWorkflowBaseProps = {}) {
@@ -386,7 +491,8 @@ export function CustomerServiceJobView(props: CustomerWorkflowBaseProps = {}) {
     reportGenerated,
     effectiveCustomerReport,
     effectiveAuditEvents,
-    customerSafeStatus: customerSafeStatusRecord
+    customerSafeStatus: customerSafeStatusRecord,
+    dataSourceMode
   } =
     useCustomerReportWorkflowState(props);
 
@@ -494,13 +600,11 @@ export function CustomerServiceJobView(props: CustomerWorkflowBaseProps = {}) {
                   Open report
                 </Link>
               ) : (
-                <button
-                  type="button"
-                  onClick={generateCustomerReportJ2035}
-                  className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                >
-                  Generate status report
-                </button>
+                <CustomerReportCommandButton
+                  dataSourceMode={dataSourceMode}
+                  demoGenerate={generateCustomerReportJ2035}
+                  generated={reportGenerated}
+                />
               )}
               <button
                 type="button"
@@ -529,13 +633,11 @@ export function CustomerServiceJobView(props: CustomerWorkflowBaseProps = {}) {
                   Report already generated
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={generateCustomerReportJ2035}
-                  className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                >
-                  Generate status report
-                </button>
+                <CustomerReportCommandButton
+                  dataSourceMode={dataSourceMode}
+                  demoGenerate={generateCustomerReportJ2035}
+                  generated={reportGenerated}
+                />
               )}
             </div>
             {reportGenerated ? (
