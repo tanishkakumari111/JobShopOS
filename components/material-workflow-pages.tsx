@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { AuditPanel } from "@/components/audit-panel";
 import { DataTableShell } from "@/components/data-table-shell";
 import { EntityLink } from "@/components/entity-link";
@@ -40,9 +41,11 @@ import type {
   PurchaseRequestState
 } from "@/lib/demo-data/types";
 import { getEffectiveAuditEvents, getEffectiveJob, getEffectivePurchaseRequest } from "@/lib/demo-state";
+import type { DataSourceMode } from "@/lib/data-source";
 import { cn } from "@/lib/utils";
 
 type MaterialBaseProps = {
+  dataSourceMode?: DataSourceMode;
   baseJobs?: typeof jobs;
   baseMaterials?: Material[];
   basePurchaseRequests?: PurchaseRequest[];
@@ -57,6 +60,7 @@ type MaterialBaseProps = {
 };
 
 function useMaterialWorkflowState({
+  dataSourceMode = "demo",
   baseJobs = jobs,
   baseMaterials = materials,
   basePurchaseRequests = purchaseRequests,
@@ -70,13 +74,22 @@ function useMaterialWorkflowState({
   basePurchaseRequestAuditTrail = pr3091AuditTrail
 }: MaterialBaseProps = {}) {
   const { state, createPurchaseRequestPR3091 } = useDemoState();
-  const effectiveJobs = useMemo(() => baseJobs.map((job) => getEffectiveJob(job, state)), [baseJobs, state]);
-  const effectivePurchaseRequest = getEffectivePurchaseRequest(
-    getPurchaseRequestById("PR-3091", basePurchaseRequests)!,
-    state
+  const effectiveJobs = useMemo(
+    () => (dataSourceMode === "demo" ? baseJobs.map((job) => getEffectiveJob(job, state)) : baseJobs),
+    [baseJobs, dataSourceMode, state]
   );
-  const runtimePurchaseRequestCreated = Boolean(state.purchaseRequests["PR-3091"]?.exists);
-  const effectiveAuditEvents = getEffectiveAuditEvents(baseAuditEvents, state);
+  const effectivePurchaseRequestSeed = getPurchaseRequestById("PR-3091", basePurchaseRequests) ?? basePurchaseRequests[0];
+  const effectivePurchaseRequest =
+    dataSourceMode === "demo" && effectivePurchaseRequestSeed
+      ? getEffectivePurchaseRequest(effectivePurchaseRequestSeed, state)
+      : effectivePurchaseRequestSeed;
+  const runtimePurchaseRequestCreated =
+    dataSourceMode === "demo"
+      ? Boolean(state.purchaseRequests["PR-3091"]?.exists)
+      : Boolean(
+          effectiveJobs.find((job) => job.id === "J-2099" && job.status === "Purchase Requested" && job.purchaseRequestId === "PR-3091")
+        );
+  const effectiveAuditEvents = dataSourceMode === "demo" ? getEffectiveAuditEvents(baseAuditEvents, state) : baseAuditEvents;
   const effectiveMaterials = baseMaterials;
   const material = getMaterialBySku("AL-6061-PLT-0.375", baseMaterials) ?? baseMaterials[0] ?? materials[0];
   const effectiveMaterialRows = baseMaterialRows ?? getMaterialRows(baseMaterials, effectiveJobs);
@@ -85,9 +98,12 @@ function useMaterialWorkflowState({
     baseReservationBreakdown ?? getMaterialReservationBreakdown(baseMaterials, effectiveJobs);
   const effectiveSupplierPanel = baseSupplierPanel ?? getMaterialSupplierPanel(baseMaterials);
   const effectiveMaterialImpactTimeline =
-    baseMaterialImpactTimeline ?? getMaterialImpactTimeline(materialImpactTimeline);
+    dataSourceMode === "demo"
+      ? baseMaterialImpactTimeline ?? getMaterialImpactTimeline(materialImpactTimeline)
+      : baseMaterialImpactTimeline ?? materialImpactTimeline;
 
   return {
+    dataSourceMode,
     state,
     createPurchaseRequestPR3091,
     effectiveJobs,
@@ -104,6 +120,102 @@ function useMaterialWorkflowState({
     effectivePurchaseRequestState: basePurchaseRequestState,
     effectivePurchaseRequestAuditTrail: basePurchaseRequestAuditTrail
   };
+}
+
+function MaterialCommandButton({
+  dataSourceMode,
+  onDemoAction,
+  demoLabel,
+  successLabel,
+  endpoint,
+  idempotencyKey
+}: {
+  dataSourceMode: DataSourceMode;
+  onDemoAction: () => void;
+  demoLabel: string;
+  successLabel: string;
+  endpoint: string;
+  idempotencyKey: string;
+}) {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hasSucceeded, setHasSucceeded] = useState(false);
+
+  useEffect(() => {
+    setStatusMessage(null);
+    setErrorMessage(null);
+    setHasSucceeded(false);
+    setIsSubmitting(false);
+  }, [dataSourceMode, endpoint, idempotencyKey]);
+
+  async function handleClick() {
+    if (isSubmitting) {
+      return;
+    }
+
+    if (dataSourceMode === "demo") {
+      onDemoAction();
+      setHasSucceeded(true);
+      setStatusMessage(successLabel);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey
+        }
+      });
+      const payload = (await response.json()) as { status?: string; message?: string; error?: { message?: string } };
+
+      if (!response.ok) {
+        throw new Error(payload.error?.message ?? payload.message ?? "Materials command failed.");
+      }
+
+      if (payload.status !== "succeeded") {
+        throw new Error("Materials command did not return a succeeded result.");
+      }
+
+      setHasSucceeded(true);
+      setStatusMessage(successLabel);
+      router.refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Materials command failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={isSubmitting}
+        className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500"
+      >
+        {isSubmitting ? "Creating..." : hasSucceeded ? successLabel : demoLabel}
+      </button>
+      {statusMessage ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+          {statusMessage}
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-900">
+          {errorMessage}
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 export function MaterialDashboardView(props: MaterialBaseProps = {}) {
@@ -456,6 +568,7 @@ export function MaterialDetailView(props: MaterialBaseProps = {}) {
 
 export function MaterialImpactView(props: MaterialBaseProps = {}) {
   const {
+    dataSourceMode,
     effectiveJobs,
     runtimePurchaseRequestCreated,
     createPurchaseRequestPR3091,
@@ -514,13 +627,14 @@ export function MaterialImpactView(props: MaterialBaseProps = {}) {
               View purchase request
             </Link>
           ) : (
-            <button
-              type="button"
-              onClick={createPurchaseRequestPR3091}
-              className="inline-flex items-center gap-2 rounded-sm border border-slate-950 bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-            >
-              Create purchase request
-            </button>
+            <MaterialCommandButton
+              dataSourceMode={dataSourceMode}
+              onDemoAction={createPurchaseRequestPR3091}
+              demoLabel="Create purchase request"
+              successLabel="Purchase request linked"
+              endpoint="/api/commands/materials/j-2099/create-purchase-request"
+              idempotencyKey="ui-materials-J-2099-create-purchase-request"
+            />
           )}
         </div>
       </div>
