@@ -1,6 +1,5 @@
-import type { Prisma, QuoteStatus } from "@prisma/client";
-
 import { quoteMaterialEstimateRows, quoteRoutingEstimateRows } from "@/lib/demo-data";
+import type { PrismaTransaction } from "@/lib/db/prisma-transaction";
 
 import { createAuthorizationError, createConflictError, createNotFoundError } from "./errors";
 import { prepareAuditEventInput } from "./audit";
@@ -24,7 +23,7 @@ type QuoteCommandResult = {
   workOrderId?: string;
 };
 
-type PrismaTransaction = Prisma.TransactionClient;
+type QuoteStatus = "DRAFT" | "SUBMITTED" | "NEEDS_OWNER_APPROVAL" | "APPROVED" | "REJECTED" | "EXPIRED" | "CONVERTED_TO_JOB";
 
 type ApprovableQuoteStatus = Extract<QuoteStatus, "DRAFT" | "SUBMITTED" | "NEEDS_OWNER_APPROVAL">;
 

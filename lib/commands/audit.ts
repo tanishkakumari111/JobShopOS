@@ -1,18 +1,59 @@
-import type { AuditSeverity as PrismaAuditSeverity, AuditEntityType as PrismaAuditEntityType, Prisma } from "@prisma/client";
-import type { Prisma as PrismaNamespace } from "@prisma/client";
+type PrismaTransaction = {
+  auditEvent: {
+    findFirst(args: {
+      orderBy: { id: "desc" };
+      select: { id: true };
+    }): Promise<{ id: number } | null>;
+    create(args: {
+      data: {
+        id: number;
+        timestamp: string;
+        actor: string;
+        role: string;
+        action: string;
+        entityType: AuditEntityType;
+        entityId: string;
+        result: string;
+        notes: string;
+        severity: AuditSeverity;
+        metadata?: unknown;
+      };
+    }): Promise<unknown>;
+  };
+};
 
-type PrismaTransaction = Prisma.TransactionClient;
+export type AuditSeverity =
+  | "INFO"
+  | "WARNING"
+  | "CRITICAL"
+  | "BLOCKED"
+  | "APPROVAL"
+  | "AUTOMATION"
+  | "SUCCESS";
+
+export type AuditEntityType =
+  | "QUOTE"
+  | "JOB"
+  | "WORK_ORDER"
+  | "MATERIAL"
+  | "PURCHASE_REQUEST"
+  | "REPORT"
+  | "QUALITY"
+  | "REWORK_ORDER"
+  | "CUSTOMER"
+  | "WORK_CENTER"
+  | "CAPACITY";
 
 export type PreparedAuditEventInput = {
   actor: string;
   role: string;
   action: string;
-  entityType: PrismaAuditEntityType;
+  entityType: AuditEntityType;
   entityId: string;
   result: string;
   notes: string;
-  severity: PrismaAuditSeverity;
-  metadata?: PrismaNamespace.InputJsonValue;
+  severity: AuditSeverity;
+  metadata?: unknown;
   timestamp?: string;
 };
 

@@ -1,5 +1,4 @@
-import type { Prisma, ReportAudience } from "@prisma/client";
-
+import type { PrismaTransaction } from "@/lib/db/prisma-transaction";
 import { customerStatusReport as seedCustomerStatusReport } from "@/lib/demo-data";
 
 import { createAuthorizationError, createConflictError, createNotFoundError } from "./errors";
@@ -20,7 +19,7 @@ type CustomerReportCommandResult = {
   reportStatus: "Generated";
 };
 
-type PrismaTransaction = Prisma.TransactionClient;
+type ReportAudience = "CUSTOMER" | "INTERNAL";
 
 function isCustomerService(role: string) {
   return role === "Customer Service";

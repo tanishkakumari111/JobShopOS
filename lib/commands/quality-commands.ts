@@ -1,5 +1,4 @@
-import type { JobStatus, Prisma, ReworkOrderPriority, ReworkOrderStatus } from "@prisma/client";
-
+import type { PrismaTransaction } from "@/lib/db/prisma-transaction";
 import { createAuthorizationError, createConflictError, createNotFoundError } from "./errors";
 import { prepareAuditEventInput } from "./audit";
 import { runWorkflowCommand, type WorkflowCommandExecutionResult } from "./transaction";
@@ -18,7 +17,9 @@ type QualityCommandResult = {
   reworkOrderId: string;
 };
 
-type PrismaTransaction = Prisma.TransactionClient;
+type JobStatus = "APPROVED" | "WAITING_ON_MATERIAL" | "PURCHASE_REQUESTED" | "MATERIALS_RESERVED" | "IN_PRODUCTION" | "IN_QUALITY" | "REWORK" | "READY_TO_SHIP" | "SHIPPED" | "CLOSED" | "SCRAP_APPROVAL_REQUIRED";
+type ReworkOrderPriority = "LOW" | "MEDIUM" | "HIGH";
+type ReworkOrderStatus = "OPEN" | "IN_PROGRESS" | "COMPLETE" | "CLOSED";
 
 function isSupervisor(role: string) {
   return role === "Shop Supervisor" || role === "Owner / GM";

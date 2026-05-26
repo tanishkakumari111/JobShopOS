@@ -1,7 +1,6 @@
-import type { Prisma } from "@prisma/client";
-
 import { getDataSourceMode, isDatabaseMode } from "@/lib/data-source";
 import { getPrismaClient } from "@/lib/db/prisma";
+import type { PrismaTransaction } from "@/lib/db/prisma-transaction";
 
 import { createValidationError, toCommandErrorPayload } from "./errors";
 import { prepareAuditEventInput, writeAuditEvents } from "./audit";
@@ -12,8 +11,6 @@ import {
   recordWorkflowCommandSuccess
 } from "./idempotency";
 import type { CommandContext, CommandResult } from "./types";
-
-type PrismaTransaction = Prisma.TransactionClient;
 
 export type WorkflowCommandExecutionResult<T> = {
   data: T;
@@ -62,7 +59,7 @@ export async function runWorkflowCommand<T>({
 
   const prisma = getPrismaClient();
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: PrismaTransaction) => {
     const replay = await getWorkflowCommandReplay<T>(tx, context.idempotencyKey);
     if (replay) {
       return replay;
