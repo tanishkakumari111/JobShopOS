@@ -1,5 +1,4 @@
-import type { JobStatus, Prisma, PurchaseRequestPriority } from "@prisma/client";
-
+import type { PrismaTransaction } from "@/lib/db/prisma-transaction";
 import { createAuthorizationError, createConflictError, createNotFoundError, createValidationError } from "./errors";
 import { prepareAuditEventInput } from "./audit";
 import { runWorkflowCommand, type WorkflowCommandExecutionResult } from "./transaction";
@@ -20,7 +19,8 @@ type PurchaseRequestCommandResult = {
   quantity: number;
 };
 
-type PrismaTransaction = Prisma.TransactionClient;
+type JobStatus = "APPROVED" | "WAITING_ON_MATERIAL" | "PURCHASE_REQUESTED" | "MATERIALS_RESERVED" | "IN_PRODUCTION" | "IN_QUALITY" | "REWORK" | "READY_TO_SHIP" | "SHIPPED" | "CLOSED" | "SCRAP_APPROVAL_REQUIRED";
+type PurchaseRequestPriority = "LOW" | "MEDIUM" | "HIGH";
 
 function isBuyer(role: string) {
   return role === "Buyer";

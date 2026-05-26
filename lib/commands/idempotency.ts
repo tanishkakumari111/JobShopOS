@@ -1,17 +1,14 @@
-import type { Prisma, WorkflowCommandStatus as PrismaWorkflowCommandStatus } from "@prisma/client";
-
 import { createConflictError } from "./errors";
+import type { PrismaTransaction } from "@/lib/db/prisma-transaction";
 import type { CommandContext, CommandResult, CommandStatus } from "./types";
-
-type PrismaTransaction = Prisma.TransactionClient;
 
 type WorkflowCommandRecord = Awaited<ReturnType<PrismaTransaction["workflowCommand"]["findUnique"]>>;
 
-function toJsonValue<T>(value: T): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+function toJsonValue<T>(value: T) {
+  return JSON.parse(JSON.stringify(value));
 }
 
-function mapWorkflowCommandStatus(status: PrismaWorkflowCommandStatus): CommandStatus {
+function mapWorkflowCommandStatus(status: "PENDING" | "SUCCEEDED" | "FAILED"): CommandStatus {
   switch (status) {
     case "PENDING":
       return "pending";
